@@ -1,0 +1,15 @@
+{
+  "name": "HTML to Figma Pro",
+  "id": "html-to-figma-pro-local",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["*"],
+    "reasoning": "Fetch remote web pages and images when importing from a URL."
+  },
+  "permissions": [],
+  "capabilities": []
+}

@@ -1,0 +1,13 @@
+{
+  "name": "html-to-figma-bridge",
+  "version": "1.0.0",
+  "description": "Local companion bridge that lets the HTML to Figma Pro plugin call installed CLIs (claude / codex / opencode).",
+  "type": "module",
+  "bin": {
+    "html-to-figma-bridge": "server.mjs"
+  },
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "license": "MIT"
+}

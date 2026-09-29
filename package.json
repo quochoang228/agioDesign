@@ -1,0 +1,23 @@
+{
+  "name": "html-to-figma-pro",
+  "version": "1.0.0",
+  "description": "Convert HTML, CSS and live websites into editable Figma layers — upgraded TypeScript + React edition.",
+  "license": "MIT",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "bridge": "node bridge/server.mjs"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.95.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "esbuild": "^0.21.5",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}

@@ -1,0 +1,197 @@
+/**
+ * Shared contract between the UI iframe (DOM access) and the plugin sandbox
+ * (Figma API access). The UI does all DOM measurement and serialises a plain,
+ * structurally-cloneable tree of `LayerNode`s; the sandbox turns that tree into
+ * real Figma nodes. Keeping everything plain-serialisable is what lets the two
+ * worlds talk over `postMessage`.
+ */
+
+export type RGBA = { r: number; g: number; b: number; a: number };
+
+export interface SolidPaintData {
+  type: 'SOLID';
+  color: RGBA;
+}
+
+export interface GradientStopData {
+  position: number;
+  color: RGBA;
+}
+
+export interface GradientPaintData {
+  type: 'GRADIENT_LINEAR' | 'GRADIENT_RADIAL';
+  stops: GradientStopData[];
+  /** CSS angle in degrees (linear only; 0 = to top, 90 = to right). */
+  angle: number;
+}
+
+export interface ImagePaintData {
+  type: 'IMAGE';
+  /** Raw bytes of the decoded image, ready for `figma.createImage`. */
+  bytes: number[];
+  scaleMode: 'FILL' | 'FIT' | 'TILE';
+  /** Source URL, resolved to `bytes` by the UI before sending to the sandbox. */
+  src?: string;
+}
+
+export type PaintData = SolidPaintData | GradientPaintData | ImagePaintData;
+
+export interface BorderData {
+  color: RGBA;
+  /** Per-side weights (px). 0 = no border on that side. */
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+export type LayerType = 'FRAME' | 'TEXT' | 'IMAGE' | 'SVG';
+
+export interface BaseLayer {
+  type: LayerType;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  opacity: number;
+  cornerRadius?: [number, number, number, number];
+  fills?: PaintData[];
+  border?: BorderData;
+  /** Drop shadow effects extracted from CSS `box-shadow`. */
+  shadows?: ShadowData[];
+  /** Whether overflow was clipped (becomes `clipsContent`). */
+  clipsContent?: boolean;
+  /** CSS flex-grow of this element — used for auto-layout `layoutGrow`. */
+  flexGrow?: number;
+}
+
+export interface ShadowData {
+  color: RGBA;
+  offsetX: number;
+  offsetY: number;
+  blur: number;
+  spread: number;
+  inset: boolean;
+}
+
+export interface AutoLayoutData {
+  mode: 'HORIZONTAL' | 'VERTICAL';
+  itemSpacing: number;
+  paddingTop: number;
+  paddingRight: number;
+  paddingBottom: number;
+  paddingLeft: number;
+  primaryAxisAlign: 'MIN' | 'CENTER' | 'MAX' | 'SPACE_BETWEEN';
+  counterAxisAlign: 'MIN' | 'CENTER' | 'MAX';
+}
+
+export interface FrameLayer extends BaseLayer {
+  type: 'FRAME';
+  autoLayout?: AutoLayoutData;
+  children: LayerNode[];
+}
+
+/** A run of characters [start, end) sharing one inline style (bold span, link…). */
+export interface StyleRun {
+  start: number;
+  end: number;
+  fontFamily: string;
+  fontWeight: number;
+  italic: boolean;
+  fontSize: number;
+  color: RGBA;
+  textDecoration: 'NONE' | 'UNDERLINE' | 'STRIKETHROUGH';
+  letterSpacing: number;
+}
+
+export interface TextLayer extends BaseLayer {
+  type: 'TEXT';
+  characters: string;
+  fontSize: number;
+  fontFamily: string;
+  fontWeight: number;
+  italic: boolean;
+  lineHeight: number;
+  letterSpacing: number;
+  textAlign: 'LEFT' | 'CENTER' | 'RIGHT' | 'JUSTIFIED';
+  textColor: RGBA;
+  textDecoration: 'NONE' | 'UNDERLINE' | 'STRIKETHROUGH';
+  textCase: 'ORIGINAL' | 'UPPER' | 'LOWER';
+  /** True if the text rendered across more than one line; controls auto-resize. */
+  multiline: boolean;
+  /** Per-segment style overrides (bold/italic/colour/links within a paragraph). */
+  runs?: StyleRun[];
+}
+
+export interface ImageLayer extends BaseLayer {
+  type: 'IMAGE';
+}
+
+export interface SvgLayer extends BaseLayer {
+  type: 'SVG';
+  svg: string;
+}
+
+export type LayerNode = FrameLayer | TextLayer | ImageLayer | SvgLayer;
+
+/** Render-width category. `custom` uses `ConvertOptions.customWidth`. */
+export type WidthPreset = 'mobile' | 'tablet' | 'desktop' | 'custom';
+
+/** Preset render widths (px) per device category. */
+export const WIDTH_PRESETS: Record<Exclude<WidthPreset, 'custom'>, number> = {
+  mobile: 390,
+  tablet: 768,
+  desktop: 1280,
+};
+
+/** Resolve the effective render width (px) from the chosen options. */
+export function resolveRenderWidth(o: Pick<ConvertOptions, 'widthPreset' | 'customWidth'>): number {
+  const raw = o.widthPreset === 'custom' ? o.customWidth : WIDTH_PRESETS[o.widthPreset];
+  return Math.min(4096, Math.max(64, Math.round(raw) || WIDTH_PRESETS.mobile));
+}
+
+/** Options the user controls from the UI. */
+export interface ConvertOptions {
+  useAutoLayout: boolean;
+  importImages: boolean;
+  wrapInComponent: boolean;
+  scale: number;
+  /** Which render-width category is selected. */
+  widthPreset: WidthPreset;
+  /** Render width (px) used when `widthPreset === 'custom'`. */
+  customWidth: number;
+}
+
+/* ---- messages: UI -> sandbox ---- */
+
+import type { AgentSettings } from './agent';
+
+export type UiToPluginMessage =
+  | {
+      type: 'IMPORT';
+      tree: LayerNode;
+      options: ConvertOptions;
+      sourceName: string;
+      /** Position within a multi-file batch (0-based); roots are tiled left→right. */
+      batchIndex?: number;
+      batchTotal?: number;
+    }
+  | { type: 'GET_SETTINGS' }
+  | { type: 'SAVE_SETTINGS'; options: ConvertOptions }
+  | { type: 'AGENT_GET_SETTINGS' }
+  | { type: 'AGENT_SAVE_SETTINGS'; settings: AgentSettings }
+  | { type: 'EXEC_TOOL'; id: string; name: string; args: unknown }
+  | { type: 'RESIZE'; width: number; height: number }
+  | { type: 'NOTIFY'; message: string; error?: boolean }
+  | { type: 'CANCEL' };
+
+/* ---- messages: sandbox -> UI ---- */
+
+export type PluginToUiMessage =
+  | { type: 'SETTINGS'; options: ConvertOptions }
+  | { type: 'AGENT_SETTINGS'; settings: AgentSettings }
+  | { type: 'TOOL_RESULT'; id: string; ok: boolean; result?: unknown; error?: string }
+  | { type: 'PROGRESS'; done: number; total: number }
+  | { type: 'DONE'; nodeCount: number }
+  | { type: 'ERROR'; message: string };
