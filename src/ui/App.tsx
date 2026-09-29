@@ -4,6 +4,8 @@ import type { ConvertOptions, PluginToUiMessage, UiToPluginMessage, WidthPreset 
 import { WIDTH_PRESETS, resolveRenderWidth } from '../shared/types';
 import { htmlToLayerTree } from './converter';
 import { ChatPanel } from './ai/ChatPanel';
+import { ResizeGrip } from './ResizeGrip';
+import { IconBack, IconClose, IconCode, IconEye, IconFile, IconLink, IconSparkle, IconUpload } from './icons';
 
 const DEFAULT_OPTIONS: ConvertOptions = {
   useAutoLayout: false,
@@ -15,11 +17,18 @@ const DEFAULT_OPTIONS: ConvertOptions = {
 };
 
 /** Render-width categories shown as a segmented control, in display order. */
-const WIDTH_CHOICES: { preset: WidthPreset; label: string; sub: string }[] = [
-  { preset: 'mobile', label: 'Mobile', sub: `${WIDTH_PRESETS.mobile}px` },
-  { preset: 'tablet', label: 'Tablet', sub: `${WIDTH_PRESETS.tablet}px` },
-  { preset: 'desktop', label: 'Desktop', sub: `${WIDTH_PRESETS.desktop}px` },
-  { preset: 'custom', label: 'Custom', sub: 'px' },
+const WIDTH_CHOICES: { preset: WidthPreset; label: string }[] = [
+  { preset: 'mobile', label: 'Mobile' },
+  { preset: 'tablet', label: 'Tablet' },
+  { preset: 'desktop', label: 'Desktop' },
+  { preset: 'custom', label: 'Custom' },
+];
+
+const TABS: { id: Tab; label: string; icon: () => JSX.Element }[] = [
+  { id: 'paste', label: 'Code', icon: IconCode },
+  { id: 'url', label: 'URL', icon: IconLink },
+  { id: 'file', label: 'Files', icon: IconFile },
+  { id: 'ai', label: 'AI', icon: IconSparkle },
 ];
 
 const SAMPLE_HTML = `<div style="font-family:Inter,sans-serif;width:360px;padding:24px;background:#0d1117;border-radius:16px;color:#fff;display:flex;flex-direction:column;gap:16px">
@@ -223,7 +232,6 @@ export function App() {
   const onPreview = useCallback(async () => {
     try {
       const sources = await resolveSources();
-      send({ type: 'RESIZE', width: 640, height: 760 });
       setPreview(sources.map((s) => ({ html: s.html, name: s.name })));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -232,10 +240,7 @@ export function App() {
     }
   }, [resolveSources]);
 
-  const closePreview = useCallback(() => {
-    setPreview(null);
-    send({ type: 'RESIZE', width: 460, height: 600 });
-  }, []);
+  const closePreview = useCallback(() => setPreview(null), []);
 
   const importFromPreview = useCallback(() => {
     closePreview();
@@ -244,209 +249,199 @@ export function App() {
 
   return (
     <div className="app">
-      <header className="header">
-        <div className="logo">
-          <span className="logo-mark" />
-          <div>
-            <h1>HTML to Figma <span className="pro">Pro</span></h1>
-            <p>Convert HTML, CSS &amp; live sites into editable layers</p>
-          </div>
-        </div>
-      </header>
-
-      <nav className="tabs">
-        <button className={tab === 'paste' ? 'tab active' : 'tab'} onClick={() => setTab('paste')}>
-          Paste HTML
-        </button>
-        <button className={tab === 'url' ? 'tab active' : 'tab'} onClick={() => setTab('url')}>
-          From URL
-        </button>
-        <button className={tab === 'file' ? 'tab active' : 'tab'} onClick={() => setTab('file')}>
-          File
-        </button>
-        <button className={tab === 'ai' ? 'tab active' : 'tab'} onClick={() => setTab('ai')}>
-          AI Agent
-        </button>
+      <nav className="tabs" role="tablist">
+        {TABS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={tab === id}
+            className={tab === id ? 'tab active' : 'tab'}
+            onClick={() => setTab(id)}
+          >
+            <Icon />
+            {label}
+          </button>
+        ))}
       </nav>
 
       {tab === 'ai' && <ChatPanel importHtml={importHtml} width={width} />}
 
       {tab !== 'ai' && (
-      <>
-      <main className="content">
-        {tab === 'paste' ? (
-          <textarea
-            className="code"
-            spellCheck={false}
-            value={html}
-            placeholder="Paste your HTML markup here…"
-            onChange={(e) => setHtml(e.target.value)}
-          />
-        ) : tab === 'url' ? (
-          <div className="url-pane">
-            <input
-              className="input"
-              type="text"
-              placeholder="example.com or https://example.com"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-            />
-            <p className="hint">
-              The page is fetched in the browser. Some sites block cross-origin requests (CORS) —
-              paste HTML directly if a fetch fails.
-            </p>
-          </div>
-        ) : (
-          <div className="file-pane">
-            <label
-              className={dragOver ? 'dropzone over' : 'dropzone'}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={onDrop}
-            >
-              <input
-                type="file"
-                accept=".html,.htm,.svg"
-                multiple
-                hidden
-                onChange={(e) => {
-                  if (e.target.files?.length) addFiles(e.target.files);
-                  e.target.value = ''; // allow re-selecting the same file
-                }}
-              />
-              <span className="file-cta">Click to choose files</span>
-              <span className="hint">or drag &amp; drop .html / .svg files here (multiple OK)</span>
-            </label>
+        <>
+          <main className="converter">
+            <section className="source">
+              {tab === 'paste' ? (
+                <textarea
+                  className="code-input"
+                  spellCheck={false}
+                  value={html}
+                  placeholder="Paste HTML here…"
+                  onChange={(e) => setHtml(e.target.value)}
+                />
+              ) : tab === 'url' ? (
+                <div className="stack">
+                  <label className="field">
+                    <span>Page URL</span>
+                    <input
+                      className="input"
+                      type="text"
+                      placeholder="example.com"
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && !busy && onImport()}
+                    />
+                  </label>
+                  <p className="hint">
+                    Fetched from your browser. Sites that block cross-origin requests won’t load — paste their HTML in
+                    Code instead.
+                  </p>
+                </div>
+              ) : (
+                <div className="stack">
+                  <label
+                    className={dragOver ? 'dropzone over' : 'dropzone'}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDragOver(true);
+                    }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={onDrop}
+                  >
+                    <input
+                      type="file"
+                      accept=".html,.htm,.svg"
+                      multiple
+                      hidden
+                      onChange={(e) => {
+                        if (e.target.files?.length) addFiles(e.target.files);
+                        e.target.value = ''; // allow re-selecting the same file
+                      }}
+                    />
+                    <IconUpload />
+                    <strong>Choose files</strong>
+                    <span className="hint">or drop .html / .svg here</span>
+                  </label>
 
-            {files.length > 0 && (
-              <ul className="file-list">
-                {files.map((f, i) => (
-                  <li key={f.name} className="file-row">
-                    <span className="file-name" title={f.name}>
-                      📄 {f.name}
-                    </span>
-                    <span className="file-size">{(f.content.length / 1024).toFixed(0)} KB</span>
+                  {files.length > 0 && (
+                    <ul className="file-list">
+                      {files.map((f, i) => (
+                        <li key={f.name} className="file-row">
+                          <IconFile />
+                          <span className="file-name" title={f.name}>
+                            {f.name}
+                          </span>
+                          <span className="file-size">{(f.content.length / 1024).toFixed(0)} KB</span>
+                          <button
+                            className="icon-btn sm"
+                            title="Remove"
+                            onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
+                          >
+                            <IconClose />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <p className="hint">
+                    Each file becomes its own frame, placed side by side. Use absolute URLs or data URIs for images.
+                  </p>
+                </div>
+              )}
+            </section>
+
+            <aside className="options">
+              <h3>Output</h3>
+              <div className="field">
+                <div className="field-head">
+                  <span>Render width</span>
+                  <span className="value">{width}px</span>
+                </div>
+                <div className="seg" role="group" aria-label="Render width">
+                  {WIDTH_CHOICES.map((c) => (
                     <button
-                      className="file-remove"
-                      title="Remove"
-                      onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
+                      key={c.preset}
+                      type="button"
+                      className={options.widthPreset === c.preset ? 'seg-btn active' : 'seg-btn'}
+                      onClick={() => setOption('widthPreset', c.preset)}
+                      title={c.preset === 'custom' ? 'Custom width' : `${WIDTH_PRESETS[c.preset]}px`}
                     >
-                      ✕
+                      {c.label}
                     </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+                  ))}
+                </div>
+                {options.widthPreset === 'custom' && (
+                  <input
+                    type="number"
+                    className="input"
+                    min={64}
+                    max={4096}
+                    step={1}
+                    placeholder="Width in px"
+                    value={options.customWidth}
+                    onChange={(e) =>
+                      setOption('customWidth', Math.min(4096, Math.max(0, Math.round(Number(e.target.value) || 0))))
+                    }
+                  />
+                )}
+              </div>
 
-            <p className="hint">
-              Each file becomes its own frame, tiled left→right. Relative asset paths in a local
-              file won't resolve — use absolute URLs or data URIs for images.
-            </p>
-          </div>
-        )}
+              <div className="field">
+                <span>Scale</span>
+                <div className="seg" role="group" aria-label="Scale">
+                  {[0.5, 1, 2].map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      className={options.scale === v ? 'seg-btn active' : 'seg-btn'}
+                      onClick={() => setOption('scale', v)}
+                    >
+                      {v}×
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-        <section className="options">
-          <div className="row width-row">
-            <div className="width-head">
-              <span>Render width</span>
-              <span className="badge">{width}px</span>
-            </div>
-            <div className="seg" role="group" aria-label="Render width">
-              {WIDTH_CHOICES.map((c) => (
-                <button
-                  key={c.preset}
-                  type="button"
-                  className={options.widthPreset === c.preset ? 'seg-btn active' : 'seg-btn'}
-                  onClick={() => setOption('widthPreset', c.preset)}
-                  title={`${c.label} · ${c.sub}`}
-                >
-                  <span className="seg-label">{c.label}</span>
-                  <span className="seg-sub">{c.sub}</span>
-                </button>
-              ))}
-            </div>
-            {options.widthPreset === 'custom' && (
-              <input
-                type="number"
-                className="num"
-                min={64}
-                max={4096}
-                step={1}
-                placeholder="Width in px"
-                value={options.customWidth}
-                onChange={(e) =>
-                  setOption(
-                    'customWidth',
-                    Math.min(4096, Math.max(0, Math.round(Number(e.target.value) || 0))),
-                  )
-                }
-              />
-            )}
-          </div>
+              <div className="toggles">
+                <Toggle
+                  label="Auto layout"
+                  hint="Flex containers become auto-layout frames"
+                  checked={options.useAutoLayout}
+                  onChange={(v) => setOption('useAutoLayout', v)}
+                />
+                <Toggle
+                  label="Images"
+                  hint="Fetch and embed images"
+                  checked={options.importImages}
+                  onChange={(v) => setOption('importImages', v)}
+                />
+                <Toggle
+                  label="Component"
+                  hint="Wrap the result in a component"
+                  checked={options.wrapInComponent}
+                  onChange={(v) => setOption('wrapInComponent', v)}
+                />
+              </div>
+            </aside>
+          </main>
 
-          <Toggle
-            label="Use Auto Layout"
-            hint="Convert flex containers to Figma auto-layout"
-            checked={options.useAutoLayout}
-            onChange={(v) => setOption('useAutoLayout', v)}
-          />
-          <Toggle
-            label="Import images"
-            hint="Fetch & embed <img> sources"
-            checked={options.importImages}
-            onChange={(v) => setOption('importImages', v)}
-          />
-          <Toggle
-            label="Wrap in component"
-            hint="Create a reusable component from the result"
-            checked={options.wrapInComponent}
-            onChange={(v) => setOption('wrapInComponent', v)}
-          />
-
-          <label className="row">
-            <span>Scale</span>
-            <select
-              className="select"
-              value={options.scale}
-              onChange={(e) => setOption('scale', Number(e.target.value))}
-            >
-              <option value={0.5}>0.5×</option>
-              <option value={1}>1×</option>
-              <option value={2}>2×</option>
-            </select>
-          </label>
-        </section>
-      </main>
-
-      <footer className="footer">
-        <StatusLine status={status} />
-        <div className="actions">
-          <button className="secondary" onClick={onPreview} disabled={busy}>
-            Preview
-          </button>
-          <button className="primary" onClick={onImport} disabled={busy}>
-            {busy
-              ? 'Working…'
-              : tab === 'file' && files.length > 1
-                ? `Import ${files.length} files`
-                : 'Import to Figma'}
-          </button>
-        </div>
-      </footer>
-      </>
+          <footer className="footer">
+            <StatusLine status={status} />
+            <button className="btn btn-secondary" onClick={onPreview} disabled={busy}>
+              <IconEye />
+              Preview
+            </button>
+            <button className="btn btn-primary" onClick={onImport} disabled={busy}>
+              {busy ? 'Working…' : tab === 'file' && files.length > 1 ? `Import ${files.length} files` : 'Import'}
+            </button>
+          </footer>
+        </>
       )}
 
       {preview && (
-        <PreviewOverlay
-          sources={preview}
-          width={width}
-          onClose={closePreview}
-          onImport={importFromPreview}
-        />
+        <PreviewOverlay sources={preview} width={width} onClose={closePreview} onImport={importFromPreview} />
       )}
+      <ResizeGrip />
     </div>
   );
 }
@@ -495,23 +490,22 @@ function PreviewOverlay(props: {
 
   return (
     <div className="overlay">
-      <header className="overlay-head">
+      <header className="sheet-head">
         <button className="icon-btn" onClick={onClose} title="Back">
-          ‹
+          <IconBack />
         </button>
-        <div className="overlay-title">
-          Preview
-          <small>
-            {width}px · {Math.round(scale * 100)}%
-          </small>
-        </div>
-        <button className="primary sm" onClick={onImport}>
+        <strong>Preview</strong>
+        <span className="muted">
+          {width}px · {Math.round(scale * 100)}%
+        </span>
+        <span className="spacer" />
+        <button className="btn btn-primary btn-sm" onClick={onImport}>
           Import{sources.length > 1 ? ` ${sources.length}` : ''}
         </button>
       </header>
 
       {sources.length > 1 && (
-        <nav className="preview-chips">
+        <nav className="chips preview-chips">
           {sources.map((s, i) => (
             <button
               key={s.name + i}
@@ -556,7 +550,7 @@ function Toggle(props: {
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="row toggle-row">
+    <label className="toggle">
       <div className="toggle-text">
         <span>{props.label}</span>
         <small>{props.hint}</small>
@@ -573,9 +567,9 @@ function Toggle(props: {
 
 function StatusLine({ status }: { status: Status }) {
   const fileTag = (b?: Batch) => (b ? `File ${b.i}/${b.n} · ` : '');
-  if (status.kind === 'idle') return <span className="status muted">Ready</span>;
+  if (status.kind === 'idle') return <span className="status muted" />;
   if (status.kind === 'rendering')
-    return <span className="status">{fileTag(status.batch)}Rendering DOM…</span>;
+    return <span className="status">{fileTag(status.batch)}Rendering…</span>;
   if (status.kind === 'building') {
     const pct = status.total ? Math.round((status.done / status.total) * 100) : 0;
     return (

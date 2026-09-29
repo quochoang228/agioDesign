@@ -4,6 +4,7 @@
  * reports progress back to the UI. Also persists user options via clientStorage.
  */
 import type { UiToPluginMessage, PluginToUiMessage, ConvertOptions } from '../shared/types';
+import { WINDOW_DEFAULT, clampWindow } from '../shared/types';
 import type { AgentSettings } from '../shared/agent';
 import { DEFAULT_AGENT_SETTINGS } from '../shared/agent';
 import { preloadFonts, buildTree } from './builder';
@@ -11,6 +12,7 @@ import { executeTool } from './tools';
 
 const SETTINGS_KEY = 'html-to-figma-pro:options';
 const AGENT_KEY = 'html-to-figma-pro:agent';
+const SIZE_KEY = 'html-to-figma-pro:window';
 
 const DEFAULT_OPTIONS: ConvertOptions = {
   useAutoLayout: false,
@@ -21,7 +23,18 @@ const DEFAULT_OPTIONS: ConvertOptions = {
   customWidth: 1280,
 };
 
-figma.showUI(__html__, { width: 460, height: 600, themeColors: true });
+figma.showUI(__html__, { ...WINDOW_DEFAULT, themeColors: true });
+
+// Restore the window size the user last dragged to.
+figma.clientStorage
+  .getAsync(SIZE_KEY)
+  .then((saved: { width: number; height: number } | undefined) => {
+    if (saved) {
+      const { width, height } = clampWindow(saved.width, saved.height);
+      figma.ui.resize(width, height);
+    }
+  })
+  .catch(() => {});
 
 // Placement cursor for tiling a multi-file batch left→right on the canvas.
 const BATCH_GAP = 80;
@@ -82,7 +95,9 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
     }
 
     case 'RESIZE': {
-      figma.ui.resize(Math.max(360, msg.width), Math.max(400, msg.height));
+      const size = clampWindow(msg.width, msg.height);
+      figma.ui.resize(size.width, size.height);
+      if (msg.save) await figma.clientStorage.setAsync(SIZE_KEY, size);
       break;
     }
 

@@ -167,6 +167,18 @@ export interface ConvertOptions {
   customWidth: number;
 }
 
+/** Plugin window size limits (px). The UI's resize grip clamps to these too. */
+export const WINDOW_MIN = { width: 360, height: 480 };
+export const WINDOW_MAX = { width: 1200, height: 1000 };
+export const WINDOW_DEFAULT = { width: 440, height: 640 };
+
+export function clampWindow(width: number, height: number): { width: number; height: number } {
+  return {
+    width: Math.round(Math.min(WINDOW_MAX.width, Math.max(WINDOW_MIN.width, width))),
+    height: Math.round(Math.min(WINDOW_MAX.height, Math.max(WINDOW_MIN.height, height))),
+  };
+}
+
 /* ---- messages: UI -> sandbox ---- */
 
 import type { AgentSettings } from './agent';
@@ -186,7 +198,8 @@ export type UiToPluginMessage =
   | { type: 'AGENT_GET_SETTINGS' }
   | { type: 'AGENT_SAVE_SETTINGS'; settings: AgentSettings }
   | { type: 'EXEC_TOOL'; id: string; name: string; args: unknown }
-  | { type: 'RESIZE'; width: number; height: number }
+  /** `save` persists the size for next launch (sent when a resize drag ends). */
+  | { type: 'RESIZE'; width: number; height: number; save?: boolean }
   | { type: 'NOTIFY'; message: string; error?: boolean }
   | { type: 'CANCEL' };
 

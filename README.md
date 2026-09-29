@@ -19,7 +19,7 @@ conversion engine.
 | Text | Approximate box | **Per-text-node measurement** (`Range`) for accurate position & wrapping |
 | SVG | — | **Inline `<svg>` → vectors**; dashed/gradient/filter/mask SVG **rasterised** for pixel-perfect fidelity |
 | Fonts | Crashes on missing | **Safe fallback chain** (weight/italic aware) |
-| UX | One button | Tabs, options, **live progress**, persisted settings, **light/dark theme** |
+| UX | One button | Tabs, options, **live progress**, persisted settings, follows Figma's **light/dark theme**, **resizable window** (drag the bottom-right corner, 360×480 – 1200×1000, remembered; double-click resets), two-column layout when wide |
 | Output | Raw frames | Optional **component wrap**, scale (0.5×/1×/2×) |
 
 ## AI Agent (new)
@@ -51,9 +51,10 @@ which is fed straight into the same converter pipeline as the other tabs. Its
 3. ✅ **Phase 3** — **Local CLI bridge** (`bridge/server.mjs`, zero-dep): a
    companion Node server on `localhost` that shells out to installed CLIs
    (`claude`, `codex`, `opencode`) — reuses their existing auth, no API key
-   needed. Run `npm run bridge`, paste the **token** it prints into ⚙ Settings →
-   *Bridge token*, then pick a *CLI · local bridge* provider. The UI calls it
-   over `http://localhost` (the Figma sandbox can't spawn processes).
+   needed. Install it once by double-clicking `bridge/Install Bridge (<OS>)`
+   (macOS, Windows, Linux); it then starts at login. In the plugin, *Settings →
+   Local bridge → Connect* pairs via a native Allow dialog, and the same panel
+   turns it on/off — no terminal needed. See `bridge/README.md`.
 4. ✅ **Phase 4** — Figma **tool layer** + an agentic loop. The chat has a
    **Design / Agent** toggle: *Agent* mode lets the model inspect and edit the
    current page via tools — `get_selection`, `get_page_summary`,
@@ -80,9 +81,10 @@ which is fed straight into the same converter pipeline as the other tabs. Its
 ### Bridge security
 
 The bridge runs local CLIs and fetches URLs, so it only answers requests that
-carry its token (`x-bridge-token`). The token is generated on first run, stored
-in `~/.html-to-figma-bridge/token` (override with `BRIDGE_TOKEN`), and printed
-on startup. It also only accepts the plugin's `null` origin, checks the `Host`
+carry its token (`x-bridge-token`). The token is generated on first run and
+stored in `~/.html-to-figma-bridge/token` (override with `BRIDGE_TOKEN`); the
+plugin only receives it through `/pair` after you click Allow in a native OS
+dialog. It also only accepts the plugin's `null` origin, checks the `Host`
 header against DNS rebinding, and `/fetch` refuses private/loopback addresses.
 
 ## Architecture

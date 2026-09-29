@@ -6,35 +6,55 @@ its behalf: the plugin's **AI Agent** tab POSTs to `http://localhost:3939`, and
 the bridge shells out to `claude` / `codex` / `opencode` and streams the output
 back. Your existing CLI auth is reused — **no API key needed in the plugin**.
 
-## Run it
+## Install (once, no terminal needed)
+
+Double-click the installer for your OS in this folder:
+
+| OS | Install | Remove |
+|---|---|---|
+| macOS | `Install Bridge (macOS).command` (if blocked: right-click → Open) | `Uninstall Bridge (macOS).command` |
+| Windows | `Install Bridge (Windows).cmd` | `Uninstall Bridge (Windows).cmd` |
+| Linux | `Install Bridge (Linux).sh` (run in a terminal if your file manager won't) | `Uninstall Bridge (Linux).sh` |
+
+It needs Node.js 18+. The installer registers the bridge to start at login —
+a launchd agent on macOS, a hidden Startup-folder script on Windows, an XDG
+autostart entry on Linux (desktop sessions) — starts it now, and records your
+current `PATH` so login-time launches still find the CLIs. Logs go to
+`~/.html-to-figma-bridge/bridge.log`. Re-run it if you move the plugin folder.
+
+Then in the plugin: **AI → Settings → Local bridge → Connect**. A native
+dialog asks you to **Allow** the connection, and the plugin receives the
+token automatically. The same panel has the **Turn on / Turn off** switch
+(persisted across restarts; turning off also stops running CLI jobs).
+
+From a terminal the same thing is `npm run bridge:install`,
+`npm run bridge:uninstall` and `npm run bridge:status`.
+
+### Running it by hand (development)
 
 ```bash
-node bridge/server.mjs        # default port 3939
+npm run bridge                # port 3939 (exits quietly if one is already running)
 node bridge/server.mjs 4000   # custom port
 ```
 
-Launch it from a terminal where the CLI you want is on your `PATH`. On startup
-it prints which CLIs it found and its auth token:
-
-```
-html-to-figma bridge → http://localhost:3939
-CLIs on PATH: { claude: true, codex: false, opencode: true }
-Bridge token (paste into plugin ⚙ Settings): 3q2…
-```
-
-Then in the plugin: **AI Agent → ⚙ Settings**, pick a CLI provider (e.g.
-*Claude CLI · local bridge*), confirm the Bridge URL matches, paste the token
-into *Bridge token*, and chat. The token is stable across restarts (stored in
-`~/.html-to-figma-bridge/token`; delete that file to rotate it, or set
-`BRIDGE_TOKEN`).
+It prints which CLIs it found and the token. If the Allow dialog can't be shown
+(e.g. Linux without `zenity`/`kdialog`), paste the token from
+`~/.html-to-figma-bridge/token` into *Settings → Local bridge → Advanced*.
 
 ## Endpoints
 
-Every route except `/health` requires the `x-bridge-token` header (401 otherwise).
+Every route except `/health` and `/pair` requires the `x-bridge-token` header
+(401 otherwise). While the bridge is turned off, everything except `/health`,
+`/pair` and `/control/*` returns 503.
+
+**Control**
+- `POST /pair` → shows a native Allow/Deny dialog; `{ token }` on Allow, 403 on
+  Deny (then a 10 s cooldown), 501 if no dialog tool is available.
+- `POST /control/enable` / `POST /control/disable` → `{ ok, enabled }`.
 
 **Phase 3 — one-shot generate**
-- `GET /health` → `{ ok, authorized }`, plus `clis: { claude, codex, opencode }`
-  when the token is valid.
+- `GET /health` → `{ ok, authorized, enabled, pid }`, plus
+  `clis: { claude, codex, opencode }` when the token is valid.
 - `POST /generate` → body `{ cli, model, system, messages }`, streams SSE
   (`data: {"text":"…"}` chunks, then `data: [DONE]`; errors as `{"error":"…"}`).
 
