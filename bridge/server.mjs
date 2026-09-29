@@ -34,6 +34,7 @@ import net from 'node:net';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { TOOLS } from './tools.mjs';
 
 const PORT = Number(process.env.PORT || process.argv[2] || 3939);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -67,19 +68,7 @@ function tokenOk(req) {
   return got.length === want.length && crypto.timingSafeEqual(got, want);
 }
 
-const TOOL_NAMES = [
-  'get_selection',
-  'get_page_summary',
-  'get_design_system',
-  'rename_nodes',
-  'set_auto_layout',
-  'align_nodes',
-  'set_fill',
-  'set_text',
-  'generate_image',
-  'web_fetch',
-  'web_search',
-];
+const TOOL_NAMES = TOOLS.map((t) => t.name);
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36';

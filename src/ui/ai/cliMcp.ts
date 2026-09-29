@@ -9,6 +9,7 @@
 import type { ChatMessage } from '../../shared/agent';
 import type { ToolOutcome } from './agent';
 import { readSse } from './sse';
+import { CANVAS_TOOLS } from './tools';
 import { bridgeFetch, type BridgeConn } from './bridgeClient';
 
 export interface RunCliMcpParams extends BridgeConn {
@@ -25,7 +26,8 @@ function buildTask(history: ChatMessage[]): string {
   const convo = history
     .map((m) => `${m.role === 'assistant' ? 'Assistant' : 'User'}: ${m.content}`)
     .join('\n\n');
-  return `You are editing the user's current Figma page. You have Figma tools available via the MCP server "figma": get_selection, get_page_summary, get_design_system, rename_nodes, set_auto_layout, align_nodes, set_fill, set_text. Inspect with get_selection / get_page_summary before editing; never invent node ids. Complete the task, then give a one-line summary.\n\n--- Conversation ---\n${convo}`;
+  const tools = CANVAS_TOOLS.map((t) => t.name).join(', ');
+  return `You are editing the user's current Figma page. You have Figma tools available via the MCP server "figma": ${tools}. Inspect with get_selection / get_page_summary before editing; never invent node ids. Complete the task, then give a one-line summary.\n\n--- Conversation ---\n${convo}`;
 }
 
 function newSessionId(): string {
