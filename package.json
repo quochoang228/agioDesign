@@ -9,7 +9,10 @@
     "typecheck": "tsc --noEmit",
     "test": "node test/unit/run.mjs",
     "bridge": "node bridge/server.mjs",
-    "smoke:mcp": "node bridge/smoke-mcp.mjs"
+    "smoke:mcp": "node bridge/smoke-mcp.mjs",
+    "bridge:install": "node bridge/install.mjs install",
+    "bridge:uninstall": "node bridge/install.mjs uninstall",
+    "bridge:status": "node bridge/install.mjs status"
   },
   "devDependencies": {
     "@figma/plugin-typings": "^1.95.0",

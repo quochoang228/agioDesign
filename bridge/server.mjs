@@ -18,12 +18,15 @@
  *              plugin  POST /run-agent              (SSE: streams the CLI's text)
  *
  * Zero dependencies — run with:  node bridge/server.mjs [port]
+ * Normally it's installed once as a login item (`install.mjs`) and then turned
+ * on/off from the plugin via /control/enable|disable.
  *
- * Security: binds to 127.0.0.1 only, and every route except /health requires the
- * `x-bridge-token` header. The token is generated once and stored in
- * ~/.html-to-figma-bridge/token (override with BRIDGE_TOKEN); paste it into the
- * plugin's Settings. Without it, any web page open in a browser could make the
- * bridge run CLIs or fetch internal URLs on your behalf.
+ * Security: binds to 127.0.0.1 only, and every route except /health and /pair
+ * requires the `x-bridge-token` header. The token is generated once and stored
+ * in ~/.html-to-figma-bridge/token (override with BRIDGE_TOKEN). The plugin gets
+ * it via /pair, which only hands it out after the user clicks Allow in a native
+ * OS dialog. Without it, any web page open in a browser could make the bridge
+ * run CLIs or fetch internal URLs on your behalf.
  */
 import http from 'node:http';
 import os from 'node:os';
@@ -34,32 +37,56 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { TOOLS } from './tools.mjs';
 import { UA, publicFetch, parseDuckDuckGo } from './net.mjs';
+import { DEFAULT_PORT, DATA_DIR, TOKEN_FILE, STATE_FILE, PID_FILE } from './paths.mjs';
 
-const PORT = Number(process.env.PORT || process.argv[2] || 3939);
+const PORT = Number(process.env.PORT || process.argv[2] || DEFAULT_PORT);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MCP_SERVER = path.join(__dirname, 'mcp-server.mjs');
 const TOKEN = loadToken();
 
 /** Figma plugin iframes run with an opaque ("null") origin; allow extras via env. */
 const ALLOWED_ORIGINS = new Set(['null', ...(process.env.BRIDGE_ALLOW_ORIGINS || '').split(',').filter(Boolean)]);
-/** Reject DNS-rebinding requests: the Host header must name this loopback server. */
 const warnedOrigins = new Set();
+/** Reject DNS-rebinding requests: the Host header must name this loopback server. */
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`, `[::1]:${PORT}`]);
 
 function loadToken() {
   if (process.env.BRIDGE_TOKEN) return process.env.BRIDGE_TOKEN;
-  const dir = path.join(os.homedir(), '.html-to-figma-bridge');
-  const file = path.join(dir, 'token');
   try {
-    const t = fs.readFileSync(file, 'utf8').trim();
+    const t = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
     if (t) return t;
   } catch {
     /* first run — generate below */
   }
   const t = crypto.randomBytes(24).toString('base64url');
-  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  fs.writeFileSync(file, t + '\n', { mode: 0o600 });
+  fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(TOKEN_FILE, t + '\n', { mode: 0o600 });
   return t;
+}
+
+/** On/off switch toggled from the plugin; persisted so it survives restarts. */
+let enabled = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')).enabled !== false;
+  } catch {
+    return true;
+  }
+})();
+
+function setEnabled(on) {
+  enabled = on;
+  try {
+    fs.writeFileSync(STATE_FILE, JSON.stringify({ enabled: on }));
+  } catch {
+    /* non-fatal: state just won't persist */
+  }
+  if (!on) {
+    // Turning off stops everything in flight, not just new requests.
+    for (const child of children) child.kill();
+    for (const s of sessions.values()) s.events?.end();
+    sessions.clear();
+  }
+  console.log(`Bridge turned ${on ? 'on' : 'off'}.`);
 }
 
 function tokenOk(req) {
@@ -82,6 +109,22 @@ const CLIS = {
 };
 
 const useModel = (m) => m && m !== 'default';
+/** Model ids reach argv (and a shell on Windows), so only allow plain id characters. */
+const MODEL_RE = /^[A-Za-z0-9._:\/-]{1,100}$/;
+
+/** Running CLI child processes, so turning the bridge off can stop them. */
+const children = new Set();
+
+/**
+ * Spawn an installed CLI. On Windows, npm-installed CLIs are `.cmd` shims that
+ * Node can only start through a shell, so each arg is quoted; callers only pass
+ * fixed flags, validated model ids and temp paths (prompts go via stdin).
+ */
+function spawnCli(bin, args) {
+  if (process.platform !== 'win32') return spawn(bin, args, { env: process.env });
+  const quoted = args.map((a) => `"${String(a).replace(/"/g, '""')}"`);
+  return spawn(bin, quoted, { env: process.env, shell: true, windowsHide: true });
+}
 
 /** session id → { events: ServerResponse|null, pending: Map<callId,{resolve,timer}>, seq } */
 const sessions = new Map();
@@ -161,12 +204,32 @@ const server = http.createServer(async (req, res) => {
   // ---- health (unauthenticated; only reveals CLI status to token holders) ----
   if (req.method === 'GET' && route === '/health') {
     const authorized = tokenOk(req);
-    json(res, authorized ? { ok: true, authorized, clis: clisStatus() } : { ok: true, authorized });
+    // pid lets the installer stop whichever bridge holds the port.
+    const base = { ok: true, authorized, enabled, pid: process.pid };
+    json(res, authorized ? { ...base, clis: clisStatus() } : base);
+    return;
+  }
+
+  // ---- pairing: hand the token to the plugin once the user clicks Allow ----
+  if (req.method === 'POST' && route === '/pair') {
+    json(res, ...(await pair()));
     return;
   }
 
   if (!tokenOk(req)) {
-    json(res, { error: 'missing or wrong bridge token — copy it from the bridge terminal into plugin Settings' }, 401);
+    json(res, { error: 'missing or wrong bridge token — click Connect in the plugin to pair again' }, 401);
+    return;
+  }
+
+  // ---- on/off switch ----
+  if (req.method === 'POST' && (route === '/control/enable' || route === '/control/disable')) {
+    setEnabled(route === '/control/enable');
+    json(res, { ok: true, enabled });
+    return;
+  }
+
+  if (!enabled) {
+    json(res, { error: 'The bridge is turned off — turn it on in the plugin.' }, 503);
     return;
   }
 
@@ -176,6 +239,10 @@ const server = http.createServer(async (req, res) => {
     const spec = payload && CLIS[payload.cli];
     if (!spec) {
       json(res, { error: 'unknown cli' }, 400);
+      return;
+    }
+    if (useModel(payload.model) && !MODEL_RE.test(payload.model)) {
+      json(res, { error: 'invalid model id' }, 400);
       return;
     }
     sseHead(res);
@@ -288,8 +355,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (!/^[A-Za-z0-9_-]{1,64}$/.test(String(b.session || ''))) {
-      send(res, { error: 'invalid session id' });
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(String(b.session || '')) || (useModel(b.model) && !MODEL_RE.test(b.model))) {
+      send(res, { error: 'invalid session id or model' });
       res.write('data: [DONE]\n\n');
       res.end();
       return;
@@ -340,7 +407,9 @@ const server = http.createServer(async (req, res) => {
 
 /** Spawn a CLI, feed `input` on stdin, stream stdout to the SSE response, finish with [DONE]. */
 function runStreaming(res, bin, args, input, req, onDone) {
-  const child = spawn(bin, args, { env: process.env });
+  const child = spawnCli(bin, args);
+  children.add(child);
+  child.on('close', () => children.delete(child));
   child.stdin.on('error', () => {}); // CLI may exit before reading all input
   child.stdin.end(input);
   let stderr = '';
@@ -364,8 +433,106 @@ function runStreaming(res, bin, args, input, req, onDone) {
   req.on('close', () => child.kill());
 }
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`html-to-figma bridge → http://localhost:${PORT}`);
-  console.log('CLIs on PATH:', clisStatus());
-  console.log(`Bridge token (paste into plugin ⚙ Settings): ${TOKEN}`);
+// ---- pairing dialog ----
+
+let pairing = null; // in-flight pair() promise — one dialog at a time
+let pairCooldownUntil = 0;
+
+/** Show a native Allow/Deny dialog; resolve to [body, status] for the /pair response. */
+function pair() {
+  if (pairing) return pairing;
+  if (Date.now() < pairCooldownUntil) return Promise.resolve([{ error: 'Pairing was just denied — try again in a few seconds.' }, 429]);
+  pairing = askUser(
+    'A Figma plugin (HTML to Figma Pro) wants to connect to the local bridge. ' +
+      'It will be able to run your installed AI CLIs. Allow?',
+  )
+    .then((answer) => {
+      if (answer === 'allow') return [{ ok: true, token: TOKEN }, 200];
+      pairCooldownUntil = Date.now() + 10_000;
+      if (answer === 'deny') return [{ error: 'Connection was denied.' }, 403];
+      return [{ error: `Couldn't show a confirmation dialog on this system. Paste the token from ${TOKEN_FILE} into Settings instead.` }, 501];
+    })
+    .finally(() => {
+      pairing = null;
+    });
+  return pairing;
+}
+
+/** Resolve 'allow' | 'deny' | 'unsupported' from a native OS dialog. */
+function askUser(message) {
+  const title = 'HTML to Figma Bridge';
+  let cmd;
+  let args;
+  if (process.platform === 'darwin') {
+    const esc = (s) => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    cmd = 'osascript';
+    args = [
+      '-e',
+      `display dialog "${esc(message)}" with title "${esc(title)}" buttons {"Deny", "Allow"} ` +
+        'default button "Allow" cancel button "Deny" with icon caution giving up after 120',
+      '-e',
+      'if gave up of result then error number -128',
+    ];
+  } else if (process.platform === 'win32') {
+    const esc = (s) => s.replace(/'/g, "''");
+    cmd = 'powershell.exe';
+    args = [
+      '-NoProfile',
+      '-Command',
+      'Add-Type -AssemblyName System.Windows.Forms; ' +
+        '$f = New-Object System.Windows.Forms.Form -Property @{TopMost=$true}; ' +
+        `$r = [System.Windows.Forms.MessageBox]::Show($f, '${esc(message)}', '${esc(title)}', 'YesNo', 'Warning'); ` +
+        "if ($r -eq 'Yes') { exit 0 } else { exit 1 }",
+    ];
+  } else if (onPath('zenity')) {
+    cmd = 'zenity';
+    args = ['--question', `--title=${title}`, `--text=${message}`, '--ok-label=Allow', '--cancel-label=Deny', '--timeout=120'];
+  } else if (onPath('kdialog')) {
+    cmd = 'kdialog';
+    args = ['--title', title, '--yesno', message];
+  } else {
+    return Promise.resolve('unsupported');
+  }
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { stdio: 'ignore', windowsHide: true });
+    child.on('error', () => resolve('unsupported'));
+    child.on('close', (code) => resolve(code === 0 ? 'allow' : 'deny'));
+  });
+}
+
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    // Another bridge (e.g. the installed login item) already owns the port.
+    // Exit 0 so a service manager doesn't restart-loop us.
+    console.log(`Port ${PORT} is in use — a bridge is probably already running. Nothing to do.`);
+    process.exit(0);
+  }
+  throw e;
 });
+
+server.listen(PORT, '127.0.0.1', () => {
+  // The installer stops the login-item bridge through this file; ad-hoc
+  // instances on other ports (tests, `npm run bridge 4000`) leave it alone.
+  if (PORT === DEFAULT_PORT) {
+    try {
+      fs.writeFileSync(PID_FILE, String(process.pid));
+    } catch {
+      /* non-fatal */
+    }
+  }
+  console.log(`html-to-figma bridge → http://localhost:${PORT} (${enabled ? 'on' : 'off'})`);
+  console.log('CLIs on PATH:', clisStatus());
+  console.log(`Token (Connect in the plugin pairs automatically): ${TOKEN}`);
+});
+
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => {
+    for (const child of children) child.kill();
+    try {
+      if (fs.readFileSync(PID_FILE, 'utf8').trim() === String(process.pid)) fs.unlinkSync(PID_FILE);
+    } catch {
+      /* ignore */
+    }
+    process.exit(0);
+  });
+}
