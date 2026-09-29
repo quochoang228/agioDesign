@@ -106,7 +106,13 @@ npm install
 npm run build      # one-off build → dist/
 npm run watch      # rebuild on change
 npm run typecheck  # tsc --noEmit
+npm test           # unit tests (node --test, bundled with esbuild)
 ```
+
+Unit tests live in `test/unit/` and cover the DOM-free pieces: CSS value
+parsers (`src/ui/cssParse.ts`), the agent tool-call parser and SSE reader, the
+bridge's SSRF guard and search parser (`bridge/net.mjs`), and a check that the
+UI tool catalogue matches the bridge's MCP tool list.
 
 Then in the Figma desktop app: **Plugins → Development → Import plugin from
 manifest…** and pick `manifest.json`. Re-run after each build (or use `watch`).

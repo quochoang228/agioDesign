@@ -6,3 +6,4 @@ test/harness.html
 sample.html
 .claude/
 *.zip
+test/unit/.build/
