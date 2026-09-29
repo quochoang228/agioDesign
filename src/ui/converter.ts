@@ -675,6 +675,93 @@ function sameOriginFrameDocs(d: Document): Document[] {
 }
 
 /**
+ * Figma runs the plugin UI in an opaque ("null") origin. There, a frame that a
+ * bundler navigates to a `blob:null/…` URL gets an origin of its own, so its
+ * document is unreadable (contentDocument === null) and the screen imports as
+ * an empty box. Re-serve each blob: frame's HTML through `srcdoc` instead —
+ * srcdoc documents share their parent's origin — and keep doing so for frames
+ * nested inside those documents. `pending()` counts swaps still loading.
+ */
+function inlineBlobFrames(root: Document): { pending: () => number; stop: () => void } {
+  const handled = new WeakMap<Element, string>();
+  const observers: MutationObserver[] = [];
+  let inflight = 0;
+
+  const handle = (f: Element) => {
+    const src = f.getAttribute('src') || '';
+    if (!src.startsWith('blob:') || handled.get(f) === src) return;
+    handled.set(f, src);
+    const w = f.ownerDocument.defaultView;
+    if (!w) return;
+    inflight++;
+    w.fetch(src)
+      .then((r) => r.text())
+      .then((html) => {
+        const frame = f as HTMLIFrameElement;
+        frame.addEventListener(
+          'load',
+          () => {
+            inflight--;
+            try {
+              if (frame.contentDocument) watch(frame.contentDocument);
+            } catch {
+              /* still unreadable — leave it */
+            }
+          },
+          { once: true },
+        );
+        frame.srcdoc = html; // srcdoc wins over src
+      })
+      .catch(() => {
+        inflight--;
+      });
+  };
+
+  const scan = (n: Node) => {
+    if (n.nodeType !== Node.ELEMENT_NODE) return;
+    const el = n as Element;
+    if (el.tagName === 'IFRAME') handle(el);
+    el.querySelectorAll('iframe').forEach(handle);
+  };
+
+  const watch = (d: Document) => {
+    d.querySelectorAll('iframe').forEach(handle);
+    const mo = new MutationObserver((records) => {
+      for (const r of records) {
+        if (r.type === 'attributes') scan(r.target);
+        else r.addedNodes.forEach(scan);
+      }
+    });
+    mo.observe(d, { subtree: true, childList: true, attributes: true, attributeFilter: ['src'] });
+    observers.push(mo);
+  };
+
+  watch(root);
+  return { pending: () => inflight, stop: () => observers.forEach((o) => o.disconnect()) };
+}
+
+/**
+ * True while any same-origin <iframe> under `d` is still loading — including a
+ * frame whose src is set but which still shows its initial about:blank
+ * (bundlers mint a blob: URL for each frame after their own boot).
+ */
+function framesPending(d: Document): boolean {
+  for (const f of Array.from(d.querySelectorAll('iframe'))) {
+    let fd: Document | null = null;
+    try {
+      fd = f.contentDocument;
+    } catch {
+      continue; // cross-origin: nothing we could read anyway
+    }
+    if (!fd) continue;
+    if (fd.readyState !== 'complete') return true;
+    if (f.getAttribute('src') && fd.URL.startsWith('about:blank') && !fd.body?.childElementCount) return true;
+    if (framesPending(fd)) return true;
+  }
+  return false;
+}
+
+/**
  * A same-origin <iframe> (design exports often mount each screen in its own
  * frame) becomes a clipping frame containing its document's layers. Returns
  * null for cross-origin/empty frames, which then fall back to a plain box.
@@ -896,6 +983,7 @@ export async function htmlToLayerTree(
   idoc.open();
   idoc.write(fullHtml);
   idoc.close();
+  const blobFrames = inlineBlobFrames(idoc);
 
   // setTimeout (not requestAnimationFrame): an offscreen iframe's rAF is
   // throttled/suspended by the browser and may never fire. Layout itself is
@@ -915,11 +1003,16 @@ export async function htmlToLayerTree(
     // gone and the content height stops changing — or a safety timeout elapses.
     let lastH = -1;
     let stable = 0;
-    for (let i = 0; i < 40; i++) {
+    // Up to ~9 s: render-blocking stylesheets (e.g. Google Fonts) can hold the
+    // document in `loading` with a zero-height body for a while, and the
+    // frame's own 2000px viewport would otherwise look like a stable height.
+    for (let i = 0; i < 60; i++) {
       const loading =
-        idoc.querySelector('#__bundler_thumbnail, #__bundler_loading, .__loading') ||
-        sameOriginFrameDocs(idoc).some((d) => d.readyState !== 'complete');
-      const h = idoc.documentElement.scrollHeight;
+        idoc.readyState !== 'complete' ||
+        !!idoc.querySelector('#__bundler_thumbnail, #__bundler_loading, .__loading') ||
+        blobFrames.pending() > 0 ||
+        framesPending(idoc);
+      const h = idoc.body ? idoc.body.scrollHeight : 0;
       if (loading) {
         stable = 0;
         lastH = h;
@@ -1024,6 +1117,7 @@ export async function htmlToLayerTree(
     if (importImages) await resolveImages(tree);
     return { tree, fonts: Array.from(fonts) };
   } finally {
+    blobFrames.stop();
     win = prevWin;
     doc = prevDoc;
     iframe.remove();
