@@ -6,7 +6,7 @@
  * MCP. Since only the Figma plugin can touch the document, `tools/call` is
  * relayed over HTTP to the bridge (BRIDGE_PORT), which forwards it to the plugin
  * (SSE) and returns the result. Spawned by bridge/server.mjs with BRIDGE_PORT
- * and MCP_SESSION in the environment.
+ * MCP_SESSION and BRIDGE_TOKEN in the environment.
  *
  * MCP stdio transport = newline-delimited JSON-RPC 2.0. Logs go to stderr only.
  */
@@ -14,6 +14,7 @@ import readline from 'node:readline';
 
 const BRIDGE_PORT = process.env.BRIDGE_PORT || '3939';
 const SESSION = process.env.MCP_SESSION || '';
+const TOKEN = process.env.BRIDGE_TOKEN || '';
 const PROTOCOL = '2025-06-18';
 
 const TOOLS = [
@@ -102,7 +103,7 @@ async function relay(name, args) {
   try {
     const res = await fetch(`http://127.0.0.1:${BRIDGE_PORT}/mcp/call`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-bridge-token': TOKEN },
       body: JSON.stringify({ session: SESSION, name, args: args || {} }),
     });
     return await res.json();

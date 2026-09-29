@@ -45,7 +45,7 @@ export function ChatPanel({ importHtml, width }: Props) {
 
   const meta = providerMeta(settings.provider);
   const hasKey =
-    meta.kind === 'cli' ? !!settings.bridgeUrl : !!settings.apiKeys[settings.provider];
+    meta.kind === 'cli' ? !!settings.bridgeUrl && !!settings.bridgeToken : !!settings.apiKeys[settings.provider];
 
   // Load persisted agent settings, then handle settings + tool-result messages.
   useEffect(() => {
@@ -125,11 +125,11 @@ export function ChatPanel({ importHtml, width }: Props) {
           });
         }
         if (name === 'web_fetch') {
-          const text = await webFetch(String(args?.url ?? ''), settings.bridgeUrl);
+          const text = await webFetch(String(args?.url ?? ''), settings);
           return { ok: true, result: { text } };
         }
         if (name === 'web_search') {
-          const result = await webSearch(String(args?.query ?? ''), settings.bridgeUrl);
+          const result = await webSearch(String(args?.query ?? ''), settings);
           return { ok: true, result };
         }
         return sandboxTool(name, args);
@@ -148,7 +148,7 @@ export function ChatPanel({ importHtml, width }: Props) {
       return;
     }
     if (!hasKey) {
-      setError(meta.kind === 'cli' ? 'Set the bridge URL in Settings.' : 'Add your API key in Settings first.');
+      setError(meta.kind === 'cli' ? 'Set the bridge URL and token in Settings.' : 'Add your API key in Settings first.');
       setShowSettings(true);
       return;
     }
@@ -173,6 +173,7 @@ export function ChatPanel({ importHtml, width }: Props) {
     const common = {
       apiKey: settings.apiKeys[settings.provider],
       bridgeUrl: settings.bridgeUrl,
+      bridgeToken: settings.bridgeToken,
       model: settings.model,
       signal: controller.signal,
     };
@@ -186,6 +187,7 @@ export function ChatPanel({ importHtml, width }: Props) {
           // Native MCP tool-calling: the CLI agent drives the canvas via the bridge.
           await runCliMcpAgent({
             bridgeUrl: settings.bridgeUrl,
+            bridgeToken: settings.bridgeToken,
             cli: 'claude',
             model: settings.model,
             history: agentHistory,
@@ -409,7 +411,7 @@ function Settings({
         </datalist>
       </label>
 
-      {meta.kind === 'api' ? (
+      {meta.kind === 'api' && (
         <label className="cs-field">
           <span>{meta.label.split(' · ')[0]} API key</span>
           <input
@@ -423,20 +425,31 @@ function Settings({
           />
           <small className="hint">Stored locally in Figma clientStorage. Never leaves your machine except to the vendor API.</small>
         </label>
-      ) : (
-        <label className="cs-field">
-          <span>Bridge URL</span>
-          <input
-            className="input"
-            type="text"
-            value={settings.bridgeUrl}
-            onChange={(e) => patch({ bridgeUrl: e.target.value })}
-          />
-          <small className="hint">
-            Start the companion server from the plugin folder: <code>node bridge/server.mjs</code>. It runs your installed CLI — reuses its auth, no API key.
-          </small>
-        </label>
       )}
+
+      <div className="cs-divider">Local bridge{meta.kind === 'api' && ' (web tools)'}</div>
+      <label className="cs-field">
+        <span>Bridge URL</span>
+        <input
+          className="input"
+          type="text"
+          value={settings.bridgeUrl}
+          onChange={(e) => patch({ bridgeUrl: e.target.value })}
+        />
+      </label>
+      <label className="cs-field">
+        <span>Bridge token</span>
+        <input
+          className="input"
+          type="password"
+          placeholder="printed by the bridge on startup"
+          value={settings.bridgeToken}
+          onChange={(e) => patch({ bridgeToken: e.target.value.trim() })}
+        />
+        <small className="hint">
+          Run <code>npm run bridge</code> in the plugin folder and paste the token it prints. It runs your installed CLI (reuses its auth) and powers web search/fetch.
+        </small>
+      </label>
 
       <div className="cs-divider">Image generation</div>
       <label className="cs-row">

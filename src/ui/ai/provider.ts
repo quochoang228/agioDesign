@@ -13,6 +13,8 @@ export interface GenerateParams {
   apiKey?: string;
   /** Bridge base URL for `cli` providers. */
   bridgeUrl?: string;
+  /** Auth token for the local bridge (printed by `bridge/server.mjs`). */
+  bridgeToken?: string;
   /** Streamed text deltas, in order. */
   onText: (delta: string) => void;
   signal?: AbortSignal;

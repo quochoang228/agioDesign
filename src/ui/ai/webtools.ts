@@ -3,6 +3,7 @@
  * bridge fallback for CORS-blocked sites); `web_search` runs a keyword search
  * through the local bridge (which has no CORS limits).
  */
+import { bridgeFetch, type BridgeConn } from './bridgeClient';
 
 function clip(html: string, max = 4000): string {
   const text = html
@@ -15,7 +16,7 @@ function clip(html: string, max = 4000): string {
   return text.slice(0, max);
 }
 
-export async function webFetch(rawUrl: string, bridgeUrl?: string): Promise<string> {
+export async function webFetch(rawUrl: string, bridge: BridgeConn): Promise<string> {
   const url = /^https?:\/\//.test(rawUrl) ? rawUrl : 'https://' + rawUrl;
   // Try a direct fetch first (works for CORS-friendly endpoints).
   try {
@@ -24,11 +25,10 @@ export async function webFetch(rawUrl: string, bridgeUrl?: string): Promise<stri
   } catch {
     /* fall through to the bridge */
   }
-  if (bridgeUrl) {
-    const base = bridgeUrl.replace(/\/+$/, '');
-    const res = await fetch(`${base}/fetch?url=${encodeURIComponent(url)}`);
+  if (bridge.bridgeUrl) {
+    const res = await bridgeFetch(bridge, `/fetch?url=${encodeURIComponent(url)}`);
     if (res.ok) return clip(await res.text());
-    throw new Error(`Bridge fetch ${res.status}`);
+    throw new Error(`Bridge fetch ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
   }
   throw new Error('Direct fetch failed (likely CORS). Start the local bridge to fetch through it.');
 }
@@ -39,10 +39,9 @@ export interface SearchHit {
   snippet: string;
 }
 
-export async function webSearch(query: string, bridgeUrl?: string): Promise<{ results: SearchHit[] }> {
-  if (!bridgeUrl) throw new Error('Web search needs the local bridge running (node bridge/server.mjs).');
-  const base = bridgeUrl.replace(/\/+$/, '');
-  const res = await fetch(`${base}/search?q=${encodeURIComponent(query)}`);
+export async function webSearch(query: string, bridge: BridgeConn): Promise<{ results: SearchHit[] }> {
+  if (!bridge.bridgeUrl) throw new Error('Web search needs the local bridge running (npm run bridge).');
+  const res = await bridgeFetch(bridge, `/search?q=${encodeURIComponent(query)}`);
   if (!res.ok) throw new Error(`Bridge search ${res.status}`);
   return await res.json();
 }

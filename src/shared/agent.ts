@@ -119,8 +119,10 @@ export interface AgentSettings {
   model: string;
   /** Vendor API keys for `api` providers, keyed by provider id. */
   apiKeys: Partial<Record<ProviderId, string>>;
-  /** Base URL of the local companion bridge used by `cli` providers. */
+  /** Base URL of the local companion bridge used by `cli` providers and web tools. */
   bridgeUrl: string;
+  /** Auth token printed by the bridge on startup (required on every bridge call). */
+  bridgeToken: string;
   /** Which vendor generates images (Phase 6); reuses that vendor's API key. */
   imageProvider: ImageProviderId;
   imageModel: string;
@@ -136,6 +138,7 @@ export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
   model: 'claude-opus-4-8',
   apiKeys: {},
   bridgeUrl: 'http://localhost:3939',
+  bridgeToken: '',
   imageProvider: 'openai',
   imageModel: 'gpt-image-1',
 };

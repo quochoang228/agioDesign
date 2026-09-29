@@ -9,9 +9,9 @@
 import type { ChatMessage } from '../../shared/agent';
 import type { ToolOutcome } from './agent';
 import { readSse } from './sse';
+import { bridgeFetch, type BridgeConn } from './bridgeClient';
 
-export interface RunCliMcpParams {
-  bridgeUrl: string;
+export interface RunCliMcpParams extends BridgeConn {
   cli: 'claude';
   model: string;
   history: ChatMessage[];
@@ -33,7 +33,6 @@ function newSessionId(): string {
 }
 
 export async function runCliMcpAgent(p: RunCliMcpParams): Promise<void> {
-  const base = (p.bridgeUrl || 'http://localhost:3939').replace(/\/+$/, '');
   const session = newSessionId();
 
   const eventsCtrl = new AbortController();
@@ -43,12 +42,12 @@ export async function runCliMcpAgent(p: RunCliMcpParams): Promise<void> {
   // 1) Tool-relay channel: bridge pushes tool calls; we run them and post results.
   let eventsRes: Response;
   try {
-    eventsRes = await fetch(`${base}/mcp/events?session=${encodeURIComponent(session)}`, {
+    eventsRes = await bridgeFetch(p, `/mcp/events?session=${encodeURIComponent(session)}`, {
       signal: eventsCtrl.signal,
     });
-  } catch {
+  } catch (e) {
     p.signal?.removeEventListener('abort', onAbort);
-    throw new Error(`Can't reach the bridge at ${base}. Start it with:  node bridge/server.mjs`);
+    throw e;
   }
   if (!eventsRes.ok || !eventsRes.body) {
     p.signal?.removeEventListener('abort', onAbort);
@@ -68,7 +67,7 @@ export async function runCliMcpAgent(p: RunCliMcpParams): Promise<void> {
           out = { ok: false, error: e instanceof Error ? e.message : String(e) };
         }
         p.onTool(evt.name, out.ok);
-        fetch(`${base}/mcp/result`, {
+        bridgeFetch(p, '/mcp/result', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ session, callId: evt.callId, ...out }),
@@ -80,7 +79,7 @@ export async function runCliMcpAgent(p: RunCliMcpParams): Promise<void> {
 
   // 2) Run the CLI agent and stream its text.
   try {
-    const runRes = await fetch(`${base}/run-agent`, {
+    const runRes = await bridgeFetch(p, '/run-agent', {
       method: 'POST',
       signal: p.signal,
       headers: { 'content-type': 'application/json' },
