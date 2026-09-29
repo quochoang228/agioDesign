@@ -6,7 +6,7 @@ import { htmlToLayerTree } from './converter';
 import { ChatPanel } from './ai/ChatPanel';
 import { ResizeGrip } from './ResizeGrip';
 import { Segmented } from './Segmented';
-import { IconBack, IconClose, IconCode, IconEye, IconFile, IconLink, IconSparkle, IconUpload } from './icons';
+import { IconBack, IconCheck, IconClose, IconCode, IconEye, IconFile, IconLink, IconSparkle, IconUpload } from './icons';
 
 const DEFAULT_OPTIONS: ConvertOptions = {
   useAutoLayout: false,
@@ -346,65 +346,61 @@ export function App() {
             </section>
 
             <section className="glass card output-card">
-              <div className="card-title">Output</div>
-              <div className="list">
-                <div className="list-row stacked">
-                  <div className="row-head">
-                    <span>Width</span>
-                    <span className="list-detail">{width}px</span>
-                  </div>
-                  <Segmented
-                    options={WIDTH_CHOICES.map((c) => ({
-                      value: c.preset,
-                      label: c.label,
-                      title: c.preset === 'custom' ? 'Custom width' : `${WIDTH_PRESETS[c.preset]}px`,
-                    }))}
-                    value={options.widthPreset}
-                    onChange={(v) => setOption('widthPreset', v)}
-                    size="sm"
-                    ariaLabel="Render width"
+              <div className="output-row">
+                <span className="card-title">Output</span>
+                <span className="spacer" />
+                {options.widthPreset === 'custom' ? (
+                  <input
+                    type="number"
+                    className="input px-input"
+                    min={64}
+                    max={4096}
+                    step={1}
+                    aria-label="Custom width in px"
+                    value={options.customWidth}
+                    onChange={(e) =>
+                      setOption('customWidth', Math.min(4096, Math.max(0, Math.round(Number(e.target.value) || 0))))
+                    }
                   />
-                  {options.widthPreset === 'custom' && (
-                    <input
-                      type="number"
-                      className="input"
-                      min={64}
-                      max={4096}
-                      step={1}
-                      placeholder="Width in px"
-                      value={options.customWidth}
-                      onChange={(e) =>
-                        setOption('customWidth', Math.min(4096, Math.max(0, Math.round(Number(e.target.value) || 0))))
-                      }
-                    />
-                  )}
-                </div>
-                <div className="list-row">
-                  <span className="list-title">Scale</span>
-                  <Segmented
-                    options={[0.5, 1, 2].map((v) => ({ value: v, label: `${v}×` }))}
-                    value={options.scale}
-                    onChange={(v) => setOption('scale', v)}
-                    size="sm"
-                    ariaLabel="Scale"
-                  />
-                </div>
-                <Toggle
+                ) : (
+                  <span className="list-detail">{width}px</span>
+                )}
+              </div>
+              <Segmented
+                options={WIDTH_CHOICES.map((c) => ({
+                  value: c.preset,
+                  label: c.label,
+                  title: c.preset === 'custom' ? 'Custom width' : `${WIDTH_PRESETS[c.preset]}px`,
+                }))}
+                value={options.widthPreset}
+                onChange={(v) => setOption('widthPreset', v)}
+                size="sm"
+                ariaLabel="Render width"
+              />
+              <div className="output-row wrap">
+                <Segmented
+                  options={[0.5, 1, 2].map((v) => ({ value: v, label: `${v}×` }))}
+                  value={options.scale}
+                  onChange={(v) => setOption('scale', v)}
+                  size="sm"
+                  ariaLabel="Scale"
+                />
+                <OptionChip
                   label="Auto layout"
                   hint="Flex containers become auto-layout frames"
-                  checked={options.useAutoLayout}
+                  on={options.useAutoLayout}
                   onChange={(v) => setOption('useAutoLayout', v)}
                 />
-                <Toggle
+                <OptionChip
                   label="Images"
                   hint="Fetch and embed images"
-                  checked={options.importImages}
+                  on={options.importImages}
                   onChange={(v) => setOption('importImages', v)}
                 />
-                <Toggle
+                <OptionChip
                   label="Component"
                   hint="Wrap the result in a component"
-                  checked={options.wrapInComponent}
+                  on={options.wrapInComponent}
                   onChange={(v) => setOption('wrapInComponent', v)}
                 />
               </div>
@@ -529,25 +525,19 @@ function PreviewOverlay(props: {
   );
 }
 
-function Toggle(props: {
-  label: string;
-  hint: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
+/** Compact on/off pill for a boolean output option; the hint shows as a tooltip. */
+function OptionChip(props: { label: string; hint: string; on: boolean; onChange: (v: boolean) => void }) {
   return (
-    <label className="list-row toggle">
-      <div className="toggle-text">
-        <span>{props.label}</span>
-        <small>{props.hint}</small>
-      </div>
-      <input
-        type="checkbox"
-        className="switch"
-        checked={props.checked}
-        onChange={(e) => props.onChange(e.target.checked)}
-      />
-    </label>
+    <button
+      type="button"
+      className={props.on ? 'opt-chip on' : 'opt-chip'}
+      aria-pressed={props.on}
+      title={props.hint}
+      onClick={() => props.onChange(!props.on)}
+    >
+      {props.on && <IconCheck />}
+      {props.label}
+    </button>
   );
 }
 
