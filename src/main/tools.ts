@@ -7,6 +7,8 @@
  * `figma.getNodeByIdAsync`, not the deprecated sync getter.
  */
 
+import { exportHtmlTool } from './export';
+
 export type ToolResult = { ok: true; result: unknown } | { ok: false; error: string };
 
 function rgbFromHex(hex: string): RGB {
@@ -206,6 +208,9 @@ export async function executeTool(name: string, args: any): Promise<ToolResult> 
         t.characters = String(args?.characters ?? '');
         return { ok: true, result: { id: t.id } };
       }
+
+      case 'export_html':
+        return { ok: true, result: await exportHtmlTool(args ?? {}) };
 
       default:
         return { ok: false, error: `Unknown tool "${name}".` };

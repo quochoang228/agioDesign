@@ -54,7 +54,7 @@ rl.on('line', async (line) => {
       ok(id, {
         protocolVersion: (params && params.protocolVersion) || PROTOCOL,
         capabilities: { tools: {} },
-        serverInfo: { name: 'html-to-figma-figma', version: '1.0.0' },
+        serverInfo: { name: 'agiodesign', version: '1.0.0' },
       });
       break;
     case 'ping':

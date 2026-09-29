@@ -9,10 +9,11 @@ import type { AgentSettings } from '../shared/agent';
 import { DEFAULT_AGENT_SETTINGS } from '../shared/agent';
 import { preloadFonts, buildTree } from './builder';
 import { executeTool } from './tools';
+import { EXPORT_KEY, exportSelection, loadExportOptions, selectionItems, setupCodegen } from './export';
 
-const SETTINGS_KEY = 'html-to-figma-pro:options';
-const AGENT_KEY = 'html-to-figma-pro:agent';
-const SIZE_KEY = 'html-to-figma-pro:window';
+const SETTINGS_KEY = 'agiodesign:options';
+const AGENT_KEY = 'agiodesign:agent';
+const SIZE_KEY = 'agiodesign:window';
 
 const DEFAULT_OPTIONS: ConvertOptions = {
   useAutoLayout: false,
@@ -23,10 +24,13 @@ const DEFAULT_OPTIONS: ConvertOptions = {
   customWidth: 1280,
 };
 
-figma.showUI(__html__, { ...WINDOW_DEFAULT, themeColors: true });
+// In Dev Mode the plugin runs as a code generator only (no window).
+const CODEGEN = figma.mode === 'codegen';
+if (CODEGEN) setupCodegen();
+else figma.showUI(__html__, { ...WINDOW_DEFAULT, themeColors: true });
 
 // Restore the window size the user last dragged to.
-figma.clientStorage
+if (!CODEGEN) figma.clientStorage
   .getAsync(SIZE_KEY)
   .then((saved: { width: number; height: number } | undefined) => {
     if (saved) {
@@ -55,7 +59,10 @@ async function loadSettings(): Promise<ConvertOptions> {
   }
 }
 
-figma.ui.onmessage = async (msg: UiToPluginMessage) => {
+// Keep the Code tab's selection list current.
+if (!CODEGEN) figma.on('selectionchange', () => post({ type: 'SELECTION', items: selectionItems() }));
+
+if (!CODEGEN) figma.ui.onmessage = async (msg: UiToPluginMessage) => {
   switch (msg.type) {
     case 'GET_SETTINGS': {
       post({ type: 'SETTINGS', options: await loadSettings() });
@@ -108,6 +115,43 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
 
     case 'CANCEL': {
       figma.closePlugin();
+      break;
+    }
+
+    case 'EXPORT_GET_STATE': {
+      post({ type: 'EXPORT_SETTINGS', options: await loadExportOptions() });
+      post({ type: 'SELECTION', items: selectionItems() });
+      break;
+    }
+
+    case 'EXPORT_SAVE_SETTINGS': {
+      await figma.clientStorage.setAsync(EXPORT_KEY, msg.options);
+      break;
+    }
+
+    case 'EXPORT_SELECTION': {
+      const { requestId } = msg;
+      try {
+        let last = 0;
+        const bundle = await exportSelection(msg.ids, msg.density, msg.srcset, (done, total) => {
+          if (done - last >= 25 || done === total) {
+            last = done;
+            post({ type: 'EXPORT_PROGRESS', requestId, done, total });
+          }
+        });
+        post({ type: 'EXPORT_RESULT', requestId, bundle });
+      } catch (err) {
+        post({ type: 'EXPORT_ERROR', requestId, message: err instanceof Error ? err.message : String(err) });
+      }
+      break;
+    }
+
+    case 'FOCUS_NODE': {
+      const node = await figma.getNodeByIdAsync(msg.id);
+      if (node && node.type !== 'PAGE' && node.type !== 'DOCUMENT') {
+        figma.currentPage.selection = [node as SceneNode];
+        figma.viewport.scrollAndZoomIntoView([node as SceneNode]);
+      }
       break;
     }
 

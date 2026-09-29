@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * HTML-to-Figma-Pro — local CLI bridge.
+ * agioDesign — local CLI bridge.
  *
  * The Figma plugin sandbox cannot spawn processes or touch the filesystem, so
  * this companion server does it instead. Two capabilities:
@@ -23,7 +23,7 @@
  *
  * Security: binds to 127.0.0.1 only, and every route except /health and /pair
  * requires the `x-bridge-token` header. The token is generated once and stored
- * in ~/.html-to-figma-bridge/token (override with BRIDGE_TOKEN). The plugin gets
+ * in ~/.agiodesign-bridge/token (override with BRIDGE_TOKEN). The plugin gets
  * it via /pair, which only hands it out after the user clicks Allow in a native
  * OS dialog. Without it, any web page open in a browser could make the bridge
  * run CLIs or fetch internal URLs on your behalf.
@@ -37,9 +37,10 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { TOOLS } from './tools.mjs';
 import { UA, publicFetch, parseDuckDuckGo } from './net.mjs';
-import { DEFAULT_PORT, DATA_DIR, TOKEN_FILE, STATE_FILE, PID_FILE } from './paths.mjs';
+import { DEFAULT_PORT, DATA_DIR, TOKEN_FILE, STATE_FILE, PID_FILE, IS_BINARY } from './paths.mjs';
 
-const PORT = Number(process.env.PORT || process.argv[2] || DEFAULT_PORT);
+// Port: $PORT, or a numeric argument (`node server.mjs 4000`; `cli.mjs serve` passes "serve").
+const PORT = Number(process.env.PORT || process.argv.slice(2).find((a) => /^\d+$/.test(a)) || DEFAULT_PORT);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MCP_SERVER = path.join(__dirname, 'mcp-server.mjs');
 const TOKEN = loadToken();
@@ -365,8 +366,9 @@ const server = http.createServer(async (req, res) => {
     const cfg = {
       mcpServers: {
         figma: {
-          command: process.execPath, // node
-          args: [MCP_SERVER],
+          // node + script, or the packaged executable's `mcp` sub-command.
+          command: process.execPath,
+          args: IS_BINARY ? ['mcp'] : [MCP_SERVER],
           env: { BRIDGE_PORT: String(PORT), MCP_SESSION: String(b.session), BRIDGE_TOKEN: TOKEN },
         },
       },
@@ -443,7 +445,7 @@ function pair() {
   if (pairing) return pairing;
   if (Date.now() < pairCooldownUntil) return Promise.resolve([{ error: 'Pairing was just denied — try again in a few seconds.' }, 429]);
   pairing = askUser(
-    'A Figma plugin (HTML to Figma Pro) wants to connect to the local bridge. ' +
+    'A Figma plugin (agioDesign) wants to connect to the local bridge. ' +
       'It will be able to run your installed AI CLIs. Allow?',
   )
     .then((answer) => {
@@ -460,7 +462,7 @@ function pair() {
 
 /** Resolve 'allow' | 'deny' | 'unsupported' from a native OS dialog. */
 function askUser(message) {
-  const title = 'HTML to Figma Bridge';
+  const title = 'agioDesign Bridge';
   let cmd;
   let args;
   if (process.platform === 'darwin') {
@@ -520,7 +522,7 @@ server.listen(PORT, '127.0.0.1', () => {
       /* non-fatal */
     }
   }
-  console.log(`html-to-figma bridge → http://localhost:${PORT} (${enabled ? 'on' : 'off'})`);
+  console.log(`agioDesign bridge → http://localhost:${PORT} (${enabled ? 'on' : 'off'})`);
   console.log('CLIs on PATH:', clisStatus());
   console.log(`Token (Connect in the plugin pairs automatically): ${TOKEN}`);
 });

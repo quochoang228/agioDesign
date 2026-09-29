@@ -7,9 +7,12 @@
  *
  *   node bridge/install.mjs install | uninstall | status
  *
- *   macOS   → ~/Library/LaunchAgents/com.htmltofigma.bridge.plist (launchd)
- *   Windows → Startup folder\HTML to Figma Bridge.vbs (hidden window)
- *   Linux   → ~/.config/autostart/html-to-figma-bridge.desktop (XDG, desktop sessions)
+ *   macOS   → ~/Library/LaunchAgents/com.agiodesign.bridge.plist (launchd)
+ *   Windows → Startup folder\agioDesign Bridge.vbs (hidden window)
+ *   Linux   → ~/.config/autostart/agiodesign-bridge.desktop (XDG, desktop sessions)
+ *
+ * Login items from before the rename (com.htmltofigma.bridge …) are removed on
+ * install and uninstall.
  *
  * The login item points at this folder in place — re-run install if the plugin
  * folder moves.
@@ -19,24 +22,45 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_PORT, DATA_DIR, PID_FILE, LOG_FILE } from './paths.mjs';
+import { DEFAULT_PORT, DATA_DIR, LEGACY_DATA_DIR, PID_FILE, LOG_FILE, IS_BINARY, BIN_PATH } from './paths.mjs';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
+const here = IS_BINARY ? DATA_DIR : path.dirname(fileURLToPath(import.meta.url));
 const SERVER = path.join(here, 'server.mjs');
 const NODE = process.execPath;
+/** What the login item runs: node + server.mjs, or the installed executable. */
+const PROGRAM = IS_BINARY ? [BIN_PATH, 'serve'] : [NODE, SERVER];
+
+/**
+ * Packaged executable: copy it to a stable location so the login item keeps
+ * working after the user deletes or moves the download.
+ */
+function installBinary() {
+  if (!IS_BINARY || path.resolve(process.execPath) === path.resolve(BIN_PATH)) return;
+  fs.mkdirSync(path.dirname(BIN_PATH), { recursive: true, mode: 0o700 });
+  const tmp = `${BIN_PATH}.tmp`;
+  fs.copyFileSync(process.execPath, tmp);
+  fs.chmodSync(tmp, 0o755);
+  fs.renameSync(tmp, BIN_PATH);
+}
 const HEALTH = `http://127.0.0.1:${DEFAULT_PORT}/health`;
 
-const MAC_LABEL = 'com.htmltofigma.bridge';
+const MAC_LABEL = 'com.agiodesign.bridge';
 const MAC_PLIST = path.join(os.homedir(), 'Library', 'LaunchAgents', `${MAC_LABEL}.plist`);
-const WIN_VBS = path.join(
+const STARTUP_DIR = path.join(
   process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'),
-  'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', 'HTML to Figma Bridge.vbs',
+  'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup',
 );
-const LINUX_DESKTOP = path.join(
-  process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'),
-  'autostart', 'html-to-figma-bridge.desktop',
-);
+const WIN_VBS = path.join(STARTUP_DIR, 'agioDesign Bridge.vbs');
+const AUTOSTART_DIR = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'autostart');
+const LINUX_DESKTOP = path.join(AUTOSTART_DIR, 'agiodesign-bridge.desktop');
 const LINUX_START = path.join(DATA_DIR, 'start.sh');
+
+// Pre-rename login items ("HTML to Figma" bridge).
+const LEGACY_MAC_LABEL = 'com.htmltofigma.bridge';
+const LEGACY_MAC_PLIST = path.join(os.homedir(), 'Library', 'LaunchAgents', `${LEGACY_MAC_LABEL}.plist`);
+const LEGACY_WIN_VBS = path.join(STARTUP_DIR, 'HTML to Figma Bridge.vbs');
+const LEGACY_LINUX_DESKTOP = path.join(AUTOSTART_DIR, 'html-to-figma-bridge.desktop');
+const LEGACY_LINUX_START = path.join(LEGACY_DATA_DIR, 'start.sh');
 
 /**
  * PATH for the login item. Login items get a minimal PATH, which would hide
@@ -84,6 +108,11 @@ async function stopRunning() {
   } catch {
     /* no pid file */
   }
+  try {
+    pids.add(Number(fs.readFileSync(path.join(LEGACY_DATA_DIR, 'bridge.pid'), 'utf8').trim()));
+  } catch {
+    /* no legacy pid file */
+  }
   for (const pid of pids) {
     try {
       if (pid) process.kill(pid);
@@ -107,7 +136,7 @@ const mac = {
 <dict>
   <key>Label</key><string>${MAC_LABEL}</string>
   <key>ProgramArguments</key>
-  <array><string>${xmlEsc(NODE)}</string><string>${xmlEsc(SERVER)}</string></array>
+  <array>${PROGRAM.map((a) => `<string>${xmlEsc(a)}</string>`).join('')}</array>
   <key>WorkingDirectory</key><string>${xmlEsc(here)}</string>
   <key>EnvironmentVariables</key>
   <dict><key>PATH</key><string>${xmlEsc(capturedPath())}</string></dict>
@@ -135,8 +164,10 @@ const win = {
   installed: () => fs.existsSync(WIN_VBS),
   install() {
     // cmd /c ""node" "server" >> "log" 2>&1" — outer quotes are stripped by cmd.
-    const cmd = `cmd /c ""${NODE}" "${SERVER}" >> "${LOG_FILE}" 2>&1"`;
-    const vbs = `' Starts the HTML to Figma bridge at login (hidden window).\r\nCreateObject("WScript.Shell").Run "${vbsEsc(cmd)}", 0, False\r\n`;
+    const cmd = IS_BINARY
+      ? `cmd /c ""${BIN_PATH}" serve >> "${LOG_FILE}" 2>&1"`
+      : `cmd /c ""${NODE}" "${SERVER}" >> "${LOG_FILE}" 2>&1"`;
+    const vbs = `' Starts the agioDesign bridge at login (hidden window).\r\nCreateObject("WScript.Shell").Run "${vbsEsc(cmd)}", 0, False\r\n`;
     fs.mkdirSync(path.dirname(WIN_VBS), { recursive: true });
     fs.writeFileSync(WIN_VBS, vbs);
     spawn('wscript.exe', [WIN_VBS], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
@@ -152,14 +183,14 @@ const linux = {
     fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
     fs.writeFileSync(
       LINUX_START,
-      `#!/bin/sh\n# Starts the HTML to Figma bridge (written by install.mjs).\nPATH=${shEsc(capturedPath())}\nexport PATH\nexec ${shEsc(NODE)} ${shEsc(SERVER)} >> ${shEsc(LOG_FILE)} 2>&1\n`,
+      `#!/bin/sh\n# Starts the agioDesign bridge (written by install.mjs).\nPATH=${shEsc(capturedPath())}\nexport PATH\nexec ${PROGRAM.map(shEsc).join(' ')} >> ${shEsc(LOG_FILE)} 2>&1\n`,
       { mode: 0o755 },
     );
     const desktop = [
       '[Desktop Entry]',
       'Type=Application',
-      'Name=HTML to Figma Bridge',
-      'Comment=Local bridge for the HTML to Figma Pro plugin',
+      'Name=agioDesign Bridge',
+      'Comment=Local bridge for the agioDesign Figma plugin',
       `Exec=/bin/sh "${LINUX_START.replace(/(["`$\\])/g, '\\$1')}"`,
       'NoDisplay=true',
       'X-GNOME-Autostart-enabled=true',
@@ -177,12 +208,29 @@ const linux = {
 
 const platform = process.platform === 'darwin' ? mac : process.platform === 'win32' ? win : linux;
 
+/** Remove the login item left by an install from before the rename. */
+function removeLegacy() {
+  if (process.platform === 'darwin') {
+    if (!fs.existsSync(LEGACY_MAC_PLIST)) return;
+    spawnSync('launchctl', ['bootout', `gui/${process.getuid()}/${LEGACY_MAC_LABEL}`], { stdio: 'ignore' });
+    fs.rmSync(LEGACY_MAC_PLIST, { force: true });
+  } else if (process.platform === 'win32') {
+    fs.rmSync(LEGACY_WIN_VBS, { force: true });
+  } else {
+    fs.rmSync(LEGACY_LINUX_DESKTOP, { force: true });
+    fs.rmSync(LEGACY_LINUX_START, { force: true });
+  }
+}
+
 // ---- commands ----
 
 async function install() {
   const [major] = process.versions.node.split('.').map(Number);
-  if (major < 18) throw new Error(`Node.js 18 or newer is required (found ${process.versions.node}). Get it from https://nodejs.org`);
+  if (!IS_BINARY && major < 18) throw new Error(`Node.js 18 or newer is required (found ${process.versions.node}). Get it from https://nodejs.org`);
+  removeLegacy();
   await stopRunning();
+  fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+  installBinary();
   platform.install();
   const up = (await waitFor(true)) && (await health());
   if (!up || typeof up.enabled !== 'boolean') {
@@ -191,10 +239,11 @@ async function install() {
   console.log('✓ Bridge installed — it now starts automatically when you log in.');
   console.log('');
   console.log('Next: open the plugin in Figma → AI tab → Bridge → Connect, then click Allow.');
-  console.log(`(If you move this plugin folder, run the installer again.)`);
+  if (!IS_BINARY) console.log(`(If you move this plugin folder, run the installer again.)`);
 }
 
 async function uninstall() {
+  removeLegacy();
   platform.uninstall();
   await stopRunning();
   console.log('✓ Bridge removed. It will no longer start at login.');
@@ -214,7 +263,16 @@ if (!run) {
   console.error('usage: node bridge/install.mjs install | uninstall | status');
   process.exit(2);
 }
-run().catch((e) => {
-  console.error(`✗ ${e.message}`);
-  process.exit(1);
-});
+// A double-clicked .exe closes its console window as soon as it exits.
+const pause = async () => {
+  if (!(IS_BINARY && process.platform === 'win32' && process.stdin.isTTY)) return;
+  process.stdout.write('\nPress Enter to close…');
+  await new Promise((r) => process.stdin.once('data', r));
+};
+run()
+  .catch((e) => {
+    console.error(`✗ ${e.message}`);
+    process.exitCode = 1;
+  })
+  .then(pause)
+  .then(() => process.exit());

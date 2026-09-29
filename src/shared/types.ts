@@ -182,6 +182,7 @@ export function clampWindow(width: number, height: number): { width: number; hei
 /* ---- messages: UI -> sandbox ---- */
 
 import type { AgentSettings } from './agent';
+import type { ExportBundle, ExportOptions, SelectionItem } from './export';
 
 export type UiToPluginMessage =
   | {
@@ -201,7 +202,14 @@ export type UiToPluginMessage =
   /** `save` persists the size for next launch (sent when a resize drag ends). */
   | { type: 'RESIZE'; width: number; height: number; save?: boolean }
   | { type: 'NOTIFY'; message: string; error?: boolean }
-  | { type: 'CANCEL' };
+  | { type: 'CANCEL' }
+  /** Figma → HTML: ask for persisted export options + current selection. */
+  | { type: 'EXPORT_GET_STATE' }
+  | { type: 'EXPORT_SAVE_SETTINGS'; options: ExportOptions }
+  /** Serialise the selection (or `ids`) into an ExportBundle. */
+  | { type: 'EXPORT_SELECTION'; requestId: string; ids?: string[]; density: 1 | 2 | 3; srcset: boolean }
+  /** Select and zoom to a node (e.g. from a warning). */
+  | { type: 'FOCUS_NODE'; id: string };
 
 /* ---- messages: sandbox -> UI ---- */
 
@@ -211,4 +219,9 @@ export type PluginToUiMessage =
   | { type: 'TOOL_RESULT'; id: string; ok: boolean; result?: unknown; error?: string }
   | { type: 'PROGRESS'; done: number; total: number }
   | { type: 'DONE'; nodeCount: number }
-  | { type: 'ERROR'; message: string };
+  | { type: 'ERROR'; message: string }
+  | { type: 'SELECTION'; items: SelectionItem[] }
+  | { type: 'EXPORT_SETTINGS'; options: ExportOptions }
+  | { type: 'EXPORT_PROGRESS'; requestId: string; done: number; total: number }
+  | { type: 'EXPORT_RESULT'; requestId: string; bundle: ExportBundle }
+  | { type: 'EXPORT_ERROR'; requestId: string; message: string };

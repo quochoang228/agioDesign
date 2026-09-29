@@ -9,7 +9,7 @@
  *   npm run smoke:mcp       # in another (spends a few Haiku tokens)
  *
  * Reads BRIDGE_PORT (default 3939) and BRIDGE_TOKEN (default: the bridge's
- * saved token in ~/.html-to-figma-bridge/token).
+ * saved token in ~/.agiodesign-bridge/token).
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -17,7 +17,7 @@ import path from 'node:path';
 
 const port = process.env.BRIDGE_PORT || '3939';
 const token =
-  process.env.BRIDGE_TOKEN || fs.readFileSync(path.join(os.homedir(), '.html-to-figma-bridge', 'token'), 'utf8').trim();
+  process.env.BRIDGE_TOKEN || fs.readFileSync(path.join(os.homedir(), '.agiodesign-bridge', 'token'), 'utf8').trim();
 const base = `http://127.0.0.1:${port}`;
 const headers = { 'x-bridge-token': token, 'content-type': 'application/json' };
 const session = `smoke${Date.now().toString(36)}`;

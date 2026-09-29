@@ -44,6 +44,11 @@ export const CANVAS_TOOLS: ToolSpec[] = [
     desc: 'Generate an image from a prompt and place it on the canvas, or fill a node when "targetId" is given. Needs an image key in Settings.',
     args: '{"prompt":"a soft gradient hero background","width":1024,"height":1024,"targetId":"1:2"}',
   },
+  {
+    name: 'export_html',
+    desc: 'Export frames to code (HTML/CSS, Tailwind or React). Omit "ids" to use the selection. layout: fixed|fluid|scale.',
+    args: '{"ids":["1:2"],"format":"html","layout":"fluid"}',
+  },
   { name: 'web_fetch', desc: 'Fetch the readable text of a URL.', args: '{"url":"https://example.com"}' },
   { name: 'web_search', desc: 'Search the web (needs the local bridge). Returns top results.', args: '{"query":"latest design system trends"}' },
 ];

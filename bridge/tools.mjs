@@ -70,6 +70,18 @@ export const TOOLS = [
     },
   },
   {
+    name: 'export_html',
+    description: 'Export Figma frames to code. Returns the generated files (HTML/CSS, Tailwind or React JSX); image files are referenced as assets/<name>. Omit ids to use the selection.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'array', items: { type: 'string' } },
+        format: { type: 'string', enum: ['html', 'tailwind', 'react', 'react-tailwind'] },
+        layout: { type: 'string', enum: ['fixed', 'fluid', 'scale'] },
+      },
+    },
+  },
+  {
     name: 'web_fetch',
     description: 'Fetch the readable text of a URL.',
     inputSchema: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },

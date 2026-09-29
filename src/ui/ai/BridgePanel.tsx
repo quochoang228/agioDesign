@@ -118,7 +118,7 @@ export function BridgePanel({
           />
           <small className="hint">
             Only needed if the Allow dialog can’t appear (e.g. Linux without zenity): copy it from{' '}
-            <code>~/.html-to-figma-bridge/token</code>.
+            <code>~/.agiodesign-bridge/token</code>.
           </small>
         </label>
       )}

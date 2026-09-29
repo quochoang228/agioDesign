@@ -4,9 +4,10 @@ import type { ConvertOptions, PluginToUiMessage, UiToPluginMessage, WidthPreset 
 import { WIDTH_PRESETS, resolveRenderWidth } from '../shared/types';
 import { htmlToLayerTree } from './converter';
 import { ChatPanel } from './ai/ChatPanel';
+import { ExportPanel } from './export/ExportPanel';
 import { ResizeGrip } from './ResizeGrip';
 import { Segmented } from './Segmented';
-import { IconBack, IconCheck, IconClose, IconCode, IconEye, IconFile, IconLink, IconSparkle, IconUpload } from './icons';
+import { IconBack, IconCheck, IconClose, IconCode, IconExport, IconEye, IconFile, IconLink, IconSparkle, IconUpload } from './icons';
 
 const DEFAULT_OPTIONS: ConvertOptions = {
   useAutoLayout: false,
@@ -27,6 +28,7 @@ const WIDTH_CHOICES: { preset: WidthPreset; label: string }[] = [
 
 const TABS = [
   { value: 'design' as const, label: <><IconCode />Design</> },
+  { value: 'code' as const, label: <><IconExport />Code</> },
   { value: 'ai' as const, label: <><IconSparkle />AI</> },
 ];
 
@@ -40,7 +42,7 @@ const SAMPLE_HTML = `<div style="font-family:Inter,sans-serif;width:360px;paddin
   <div style="display:flex;align-items:center;gap:12px">
     <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#ec4899)"></div>
     <div>
-      <div style="font-size:16px;font-weight:600">HTML to Figma Pro</div>
+      <div style="font-size:16px;font-weight:600">agioDesign</div>
       <div style="font-size:13px;color:#8b949e">Paste · Import · Convert</div>
     </div>
   </div>
@@ -52,7 +54,7 @@ function send(msg: UiToPluginMessage): void {
   parent.postMessage({ pluginMessage: msg }, '*');
 }
 
-type Tab = 'design' | 'ai';
+type Tab = 'design' | 'code' | 'ai';
 /** Where the Design tab's HTML comes from. */
 type Source = 'paste' | 'url' | 'file';
 /** When importing several files, `batch` carries the "file i of n" position. */
@@ -262,6 +264,8 @@ export function App() {
       </header>
 
       {tab === 'ai' && <ChatPanel importHtml={importHtml} width={width} />}
+
+      {tab === 'code' && <ExportPanel />}
 
       {tab === 'design' && (
         <>

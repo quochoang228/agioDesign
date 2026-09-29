@@ -1,7 +1,7 @@
 {
-  "name": "html-to-figma-pro",
+  "name": "agiodesign",
   "version": "1.0.0",
-  "description": "Convert HTML, CSS and live websites into editable Figma layers — upgraded TypeScript + React edition.",
+  "description": "agioDesign \u2014 HTML/CSS/websites/AI prompts \u2192 editable Figma layers, and Figma \u2192 HTML/Tailwind/React.",
   "license": "MIT",
   "scripts": {
     "build": "node build.mjs",
@@ -12,7 +12,9 @@
     "smoke:mcp": "node bridge/smoke-mcp.mjs",
     "bridge:install": "node bridge/install.mjs install",
     "bridge:uninstall": "node bridge/install.mjs uninstall",
-    "bridge:status": "node bridge/install.mjs status"
+    "bridge:status": "node bridge/install.mjs status",
+    "roundtrip": "node test/build-roundtrip.mjs",
+    "package": "node scripts/package.mjs"
   },
   "devDependencies": {
     "@figma/plugin-typings": "^1.95.0",

@@ -7,3 +7,5 @@ sample.html
 .claude/
 *.zip
 test/unit/.build/
+test/roundtrip.html
+release/

@@ -1,5 +1,5 @@
 @echo off
-rem Double-click to uninstall the HTML to Figma bridge (Windows).
+rem Double-click to uninstall the agioDesign bridge (Windows).
 cd /d "%~dp0"
 where node >nul 2>nul
 if errorlevel 1 (

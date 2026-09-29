@@ -1,15 +1,36 @@
 {
-  "name": "HTML to Figma Pro",
-  "id": "html-to-figma-pro-local",
+  "name": "agioDesign",
+  "id": "agiodesign-local",
   "api": "1.0.0",
   "main": "dist/code.js",
   "ui": "dist/ui.html",
-  "editorType": ["figma"],
+  "editorType": [
+    "figma",
+    "dev"
+  ],
   "documentAccess": "dynamic-page",
   "networkAccess": {
-    "allowedDomains": ["*"],
+    "allowedDomains": [
+      "*"
+    ],
     "reasoning": "Fetch remote web pages and images when importing from a URL."
   },
   "permissions": [],
-  "capabilities": []
+  "capabilities": [
+    "codegen"
+  ],
+  "codegenLanguages": [
+    {
+      "label": "HTML + CSS",
+      "value": "html"
+    },
+    {
+      "label": "Tailwind",
+      "value": "tailwind"
+    },
+    {
+      "label": "React (JSX)",
+      "value": "react"
+    }
+  ]
 }

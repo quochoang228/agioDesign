@@ -28,6 +28,12 @@ export const IconCode = () => (
     <path d="M5.5 4.5 2 8l3.5 3.5M10.5 4.5 14 8l-3.5 3.5" />
   </Svg>
 );
+/** Box with an outgoing arrow — "export to code". */
+export const IconExport = () => (
+  <Svg>
+    <path d="M9.5 2.5h4v4M13.5 2.5 8 8M11.5 9.5v3A1.5 1.5 0 0 1 10 14H4a1.5 1.5 0 0 1-1.5-1.5v-6A1.5 1.5 0 0 1 4 5h3" />
+  </Svg>
+);
 export const IconLink = () => (
   <Svg>
     <path d="M6.5 9.5a3 3 0 0 0 4.2 0l2-2a3 3 0 0 0-4.2-4.2l-.8.8M9.5 6.5a3 3 0 0 0-4.2 0l-2 2a3 3 0 0 0 4.2 4.2l.8-.8" />

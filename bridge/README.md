@@ -20,7 +20,7 @@ It needs Node.js 18+. The installer registers the bridge to start at login —
 a launchd agent on macOS, a hidden Startup-folder script on Windows, an XDG
 autostart entry on Linux (desktop sessions) — starts it now, and records your
 current `PATH` so login-time launches still find the CLIs. Logs go to
-`~/.html-to-figma-bridge/bridge.log`. Re-run it if you move the plugin folder.
+`~/.agiodesign-bridge/bridge.log`. Re-run it if you move the plugin folder.
 
 Then in the plugin: **AI → Settings → Local bridge → Connect**. A native
 dialog asks you to **Allow** the connection, and the plugin receives the
@@ -39,7 +39,7 @@ node bridge/server.mjs 4000   # custom port
 
 It prints which CLIs it found and the token. If the Allow dialog can't be shown
 (e.g. Linux without `zenity`/`kdialog`), paste the token from
-`~/.html-to-figma-bridge/token` into *Settings → Local bridge → Advanced*.
+`~/.agiodesign-bridge/token` into *Settings → Local bridge → Advanced*.
 
 ## Endpoints
 

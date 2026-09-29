@@ -2,6 +2,8 @@ import * as esbuild from 'esbuild';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 
 const watch = process.argv.includes('--watch');
+/** `--release`: minified, no legal comments — used by `npm run package`. */
+const release = process.argv.includes('--release');
 const outdir = 'dist';
 await mkdir(outdir, { recursive: true });
 
@@ -12,6 +14,8 @@ const codeCtx = await esbuild.context({
   outfile: `${outdir}/code.js`,
   target: 'es2017',
   format: 'iife',
+  minify: release,
+  legalComments: release ? 'none' : 'inline',
   logLevel: 'info',
 });
 
@@ -25,6 +29,8 @@ const uiCtx = await esbuild.context({
   format: 'iife',
   loader: { '.css': 'text' },
   define: { 'process.env.NODE_ENV': '"production"' },
+  minify: release,
+  legalComments: release ? 'none' : 'inline',
   logLevel: 'info',
 });
 
@@ -34,7 +40,8 @@ async function emitUiHtml() {
   const jsFile = result.outputFiles?.find((f) => f.path.endsWith('.js'));
   const js = jsFile?.text ?? '';
   if (!js) throw new Error('UI bundle produced no JS output');
-  const css = await readFile('src/ui/styles.css', 'utf8');
+  let css = await readFile('src/ui/styles.css', 'utf8');
+  if (release) css = (await esbuild.transform(css, { loader: 'css', minify: true })).code;
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
