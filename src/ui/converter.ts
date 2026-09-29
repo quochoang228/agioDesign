@@ -660,6 +660,74 @@ function svgToDataUri(svg: string): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
+/** Documents of every same-origin <iframe> under `d`, nested ones included. */
+function sameOriginFrameDocs(d: Document): Document[] {
+  const out: Document[] = [];
+  d.querySelectorAll('iframe').forEach((f) => {
+    try {
+      const fd = f.contentDocument;
+      if (fd) out.push(fd, ...sameOriginFrameDocs(fd));
+    } catch {
+      /* cross-origin — can't be read, rendered as an empty box */
+    }
+  });
+  return out;
+}
+
+/**
+ * A same-origin <iframe> (design exports often mount each screen in its own
+ * frame) becomes a clipping frame containing its document's layers. Returns
+ * null for cross-origin/empty frames, which then fall back to a plain box.
+ */
+function iframeLayer(
+  frameEl: HTMLIFrameElement,
+  base: Omit<FrameLayer, 'type' | 'name' | 'fills' | 'children'>,
+  rect: DOMRect,
+  origin: DOMRect,
+  fonts: Set<string>,
+  importImages: boolean,
+): FrameLayer | null {
+  let idoc: Document | null = null;
+  let iwin: (Window & typeof globalThis) | null = null;
+  try {
+    idoc = frameEl.contentDocument;
+    iwin = frameEl.contentWindow as (Window & typeof globalThis) | null;
+  } catch {
+    return null;
+  }
+  if (!idoc?.body || !iwin) return null;
+
+  const outerStyle = win.getComputedStyle(frameEl);
+  const outerFills = backgroundPaints(outerStyle);
+  // Inner rects are relative to the frame's viewport; shift the origin so
+  // they land in the same coordinate space as the rest of the tree.
+  const innerOrigin = {
+    left: origin.left - (rect.left + frameEl.clientLeft),
+    top: origin.top - (rect.top + frameEl.clientTop),
+  } as DOMRect;
+
+  const prevWin = win;
+  const prevDoc = doc;
+  win = iwin;
+  doc = idoc;
+  try {
+    // The frame's canvas takes the <html> (or else <body>) background.
+    const htmlFills = backgroundPaints(win.getComputedStyle(idoc.documentElement), idoc.baseURI);
+    const body = walk(idoc.body, innerOrigin, fonts, importImages, idoc.baseURI);
+    return {
+      type: 'FRAME',
+      name: frameEl.title || frameEl.name || 'iframe',
+      ...base,
+      clipsContent: true,
+      fills: outerFills.length ? outerFills : htmlFills,
+      children: body ? [body] : [],
+    };
+  } finally {
+    win = prevWin;
+    doc = prevDoc;
+  }
+}
+
 /** Recursively walk a rendered element into a LayerNode. */
 function walk(
   el: HTMLElement,
@@ -722,6 +790,11 @@ function walk(
       ...base,
       svg: selfContainedSvg(el, Math.ceil(rect.width), Math.ceil(rect.height)),
     };
+  }
+
+  if (tag === 'iframe') {
+    const framed = iframeLayer(el as HTMLIFrameElement, base, rect, origin, fonts, importImages);
+    if (framed) return framed;
   }
 
   // Inline-flow paragraph → ONE text layer (with per-run styling). If the
@@ -843,7 +916,9 @@ export async function htmlToLayerTree(
     let lastH = -1;
     let stable = 0;
     for (let i = 0; i < 40; i++) {
-      const loading = idoc.querySelector('#__bundler_thumbnail, #__bundler_loading, .__loading');
+      const loading =
+        idoc.querySelector('#__bundler_thumbnail, #__bundler_loading, .__loading') ||
+        sameOriginFrameDocs(idoc).some((d) => d.readyState !== 'complete');
       const h = idoc.documentElement.scrollHeight;
       if (loading) {
         stable = 0;
@@ -875,13 +950,14 @@ export async function htmlToLayerTree(
     await delay(16);
 
     // Wait for fonts and images to settle so geometry is correct.
+    const docs = [idoc, ...sameOriginFrameDocs(idoc)];
     try {
-      const ready = (idoc as Document & { fonts?: FontFaceSet }).fonts?.ready;
-      if (ready) await Promise.race([ready, delay(2000)]);
+      const ready = docs.map((d) => (d as Document & { fonts?: FontFaceSet }).fonts?.ready).filter(Boolean);
+      if (ready.length) await Promise.race([Promise.all(ready), delay(2000)]);
     } catch {
       /* fonts API unavailable — proceed */
     }
-    const imgs = Array.from(idoc.querySelectorAll('img'));
+    const imgs = docs.flatMap((d) => Array.from(d.querySelectorAll('img')));
     await Promise.all(
       imgs.map(
         (img) =>
