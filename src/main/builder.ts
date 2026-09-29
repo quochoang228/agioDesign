@@ -307,8 +307,11 @@ export async function buildTree(
 
   let finalRoot: SceneNode = root;
   if (options.wrapInComponent && root.type === 'FRAME') {
+    // createComponentFromNode replaces `root`, which is gone afterwards —
+    // reading root.name then throws "node … does not exist". Grab it first.
+    const name = root.name;
     const component = figma.createComponentFromNode(root);
-    component.name = root.name;
+    component.name = name;
     finalRoot = component;
   }
 
