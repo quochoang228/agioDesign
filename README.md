@@ -66,8 +66,9 @@ which is fed straight into the same converter pipeline as the other tabs. Its
    MCP server exposing the Figma tools (defined once in `bridge/tools.mjs`); the bridge relays `tools/call` to the
    plugin over SSE and back. In Agent mode, the **Claude CLI** provider now
    drives the canvas via native MCP tool-calling (`src/ui/ai/cliMcp.ts`); other
-   CLIs keep the Phase-4 text protocol. The whole relay loop is verified; the
-   only version-sensitive seam is `claude`'s own MCP flags (see `bridge/README`).
+   CLIs keep the Phase-4 text protocol. The relay has been verified end-to-end
+   against the real `claude` CLI (2.1.284); re-check after CLI upgrades with
+   `npm run smoke:mcp` (see `bridge/README`).
 6. ✅ **Phase 6** — Ideation + image generation + web. Design mode shows
    **ideation chips** (3 variations, dark/light theme, more minimal…) that boost
    the prompt. Three new agent tools, handled UI-side: `generate_image` (OpenAI

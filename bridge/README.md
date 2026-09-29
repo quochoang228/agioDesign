@@ -69,9 +69,13 @@ claude --print --mcp-config <tmp.json> --strict-mcp-config \
   --allowedTools mcp__figma__get_selection,… --output-format text   # task on stdin
 ```
 
-If your `claude` version names these flags differently or still prompts for tool
-permission, adjust the `args` array in `/run-agent` inside `server.mjs` (e.g. add
-a permission-mode flag). The generated config registers a stdio MCP server:
+Verified end-to-end with **claude 2.1.284** (the CLI discovered the MCP tools,
+called them through the relay without a permission prompt, and answered). After
+upgrading the CLI, re-check with `npm run smoke:mcp` while the bridge is running
+— it plays the plugin's side of the relay and prints PASS/FAIL. If a newer
+version renames these flags or starts prompting for tool permission, adjust the
+`args` array in `/run-agent` inside `server.mjs` (e.g. add a permission-mode
+flag). The generated config registers a stdio MCP server:
 `{ "mcpServers": { "figma": { "command": "node", "args": ["mcp-server.mjs"],
 "env": { "BRIDGE_PORT", "MCP_SESSION" } } } }`.
 
