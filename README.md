@@ -19,7 +19,7 @@ conversion engine.
 | Text | Approximate box | **Per-text-node measurement** (`Range`) for accurate position & wrapping |
 | SVG | — | **Inline `<svg>` → vectors**; dashed/gradient/filter/mask SVG **rasterised** for pixel-perfect fidelity |
 | Fonts | Crashes on missing | **Safe fallback chain** (weight/italic aware) |
-| UX | One button | Tabs, options, **live progress**, persisted settings, follows Figma's **light/dark theme**, **resizable window** (drag the bottom-right corner, 360×480 – 1200×1000, remembered; double-click resets), two-column layout when wide |
+| UX | One button | Tabs, options, **live progress**, persisted settings, Apple-style **Liquid Glass** UI following Figma's **light/dark theme**, two tabs (**Design** = Code/URL/File + output settings, **AI**), **resizable window** (drag the bottom-right corner, 360×480 – 1200×1000, remembered; double-click resets), two-column layout when wide |
 | Output | Raw frames | Optional **component wrap**, scale (0.5×/1×/2×) |
 
 ## AI Agent (new)

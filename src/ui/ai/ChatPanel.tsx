@@ -10,6 +10,7 @@ import { generateImage } from './image';
 import { webFetch, webSearch } from './webtools';
 import { useBridge, type BridgeApi, type BridgeStatus } from './useBridge';
 import { BridgeBadge, BridgePanel } from './BridgePanel';
+import { Segmented } from '../Segmented';
 import {
   IconBack,
   IconCheck,
@@ -315,7 +316,7 @@ export function ChatPanel({ importHtml, width }: Props) {
 
   return (
     <div className="chat">
-      <div className="toolbar">
+      <div className="toolbar glass">
         <button className="model-pill" onClick={() => setShowSettings(true)} title="Change model">
           <span className="model-provider">{meta.label.split(' · ')[0]}</span>
           <span className="model-id">{settings.model}</span>
@@ -323,13 +324,16 @@ export function ChatPanel({ importHtml, width }: Props) {
         </button>
         {usesBridge && <BridgeBadge status={bridge.state.status} onClick={() => setShowSettings(true)} />}
         <span className="spacer" />
-        <div className="seg seg-sm" role="group" aria-label="Mode">
-          {(['design', 'agent'] as Mode[]).map((m) => (
-            <button key={m} className={mode === m ? 'seg-btn active' : 'seg-btn'} onClick={() => setMode(m)}>
-              {m === 'design' ? 'Design' : 'Agent'}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          options={[
+            { value: 'design' as Mode, label: 'Generate', title: 'Generate a new screen from a prompt' },
+            { value: 'agent' as Mode, label: 'Edit', title: 'Let the agent edit the current page' },
+          ]}
+          value={mode}
+          onChange={setMode}
+          size="sm"
+          ariaLabel="Mode"
+        />
         <button className="icon-btn" title="Settings" onClick={() => setShowSettings(true)}>
           <IconSettings />
         </button>
@@ -402,7 +406,7 @@ export function ChatPanel({ importHtml, width }: Props) {
             ))}
           </div>
         )}
-        <div className="composer-box">
+        <div className="composer-box glass">
           <textarea
             ref={inputRef}
             className="composer-input"
@@ -539,19 +543,27 @@ function SettingsSheet({
   const imageLabel = settings.imageProvider === 'openai' ? 'OpenAI' : 'Gemini';
   return (
     <div className="sheet">
-      <header className="sheet-head">
+      <header className="sheet-head glass">
         <button className="icon-btn" onClick={onClose} title="Back">
           <IconBack />
         </button>
-        <strong>AI settings</strong>
+        <strong>Settings</strong>
+        <span className="spacer" />
+        <button className="btn btn-link" onClick={onClose}>
+          Done
+        </button>
       </header>
 
       <div className="sheet-body">
-        <section className="section">
-          <h3>Model</h3>
-          <label className="field">
-            <span>Provider</span>
-            <select className="input" value={settings.provider} onChange={(e) => onPickProvider(e.target.value as ProviderId)}>
+        <div className="group-title">Model</div>
+        <div className="glass card list">
+          <label className="list-row">
+            <span className="list-title">Provider</span>
+            <select
+              className="inline-select"
+              value={settings.provider}
+              onChange={(e) => onPickProvider(e.target.value as ProviderId)}
+            >
               <optgroup label="API · bring your own key">
                 {PROVIDERS.filter((p) => p.kind === 'api').map((p) => (
                   <option key={p.id} value={p.id} disabled={!p.available}>
@@ -568,10 +580,10 @@ function SettingsSheet({
               </optgroup>
             </select>
           </label>
-          <label className="field">
-            <span>Model</span>
+          <label className="list-row">
+            <span className="list-title">Model</span>
             <input
-              className="input mono"
+              className="inline-input mono"
               list="ai-model-list"
               value={settings.model}
               spellCheck={false}
@@ -586,73 +598,67 @@ function SettingsSheet({
             </datalist>
           </label>
           {meta.kind === 'api' && (
-            <label className="field">
-              <span>{meta.label.split(' · ')[0]} API key</span>
+            <label className="list-row">
+              <span className="list-title">API key</span>
               <input
-                className="input"
+                className="inline-input"
                 type="password"
-                placeholder="Paste your key"
+                placeholder="Required"
                 value={settings.apiKeys[settings.provider] ?? ''}
                 onChange={(e) => patch({ apiKeys: { ...settings.apiKeys, [settings.provider]: e.target.value } })}
               />
-              <small className="hint">Stored in Figma on this computer; only sent to the vendor’s API.</small>
             </label>
           )}
-        </section>
+        </div>
+        <p className="group-footer">
+          {meta.kind === 'api'
+            ? `Your ${meta.label.split(' · ')[0]} key is stored in Figma on this computer and only sent to the vendor’s API.`
+            : 'Runs the CLI installed on your computer through the local bridge — no API key needed.'}
+        </p>
 
-        <section className="section">
-          <h3>Local bridge</h3>
-          <p className="hint">
-            Runs AI CLIs installed on your computer (no API key) and powers web search.
-            {meta.kind === 'api' && ' Optional for API providers.'}
-          </p>
-          <BridgePanel
-            bridge={bridge}
-            url={settings.bridgeUrl}
-            token={settings.bridgeToken}
-            onChange={(u) => patch(u)}
-          />
-        </section>
+        <div className="group-title">Local bridge</div>
+        <BridgePanel bridge={bridge} url={settings.bridgeUrl} token={settings.bridgeToken} onChange={(u) => patch(u)} />
+        <p className="group-footer">
+          Runs AI CLIs on your computer and powers web search.{meta.kind === 'api' && ' Optional for API providers.'}
+        </p>
 
-        <section className="section">
-          <h3>Image generation</h3>
-          <div className="field-row">
-            <label className="field">
-              <span>Provider</span>
-              <select
-                className="input"
-                value={settings.imageProvider}
-                onChange={(e) => {
-                  const ip = e.target.value as ImageProviderId;
-                  patch({ imageProvider: ip, imageModel: DEFAULT_IMAGE_MODELS[ip] });
-                }}
-              >
-                <option value="openai">OpenAI</option>
-                <option value="google">Gemini</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>Model</span>
-              <input
-                className="input mono"
-                value={settings.imageModel}
-                spellCheck={false}
-                onChange={(e) => patch({ imageModel: e.target.value })}
-              />
-            </label>
-          </div>
-          <label className="field">
-            <span>{imageLabel} API key</span>
+        <div className="group-title">Image generation</div>
+        <div className="glass card list">
+          <label className="list-row">
+            <span className="list-title">Provider</span>
+            <select
+              className="inline-select"
+              value={settings.imageProvider}
+              onChange={(e) => {
+                const ip = e.target.value as ImageProviderId;
+                patch({ imageProvider: ip, imageModel: DEFAULT_IMAGE_MODELS[ip] });
+              }}
+            >
+              <option value="openai">OpenAI</option>
+              <option value="google">Gemini</option>
+            </select>
+          </label>
+          <label className="list-row">
+            <span className="list-title">Model</span>
             <input
-              className="input"
+              className="inline-input mono"
+              value={settings.imageModel}
+              spellCheck={false}
+              onChange={(e) => patch({ imageModel: e.target.value })}
+            />
+          </label>
+          <label className="list-row">
+            <span className="list-title">API key</span>
+            <input
+              className="inline-input"
               type="password"
-              placeholder="Paste your key"
+              placeholder="Required for images"
               value={settings.apiKeys[settings.imageProvider] ?? ''}
               onChange={(e) => patch({ apiKeys: { ...settings.apiKeys, [settings.imageProvider]: e.target.value } })}
             />
-            <small className="hint">Shared with the {imageLabel} chat provider. Claude and CLIs can’t generate images.</small>
           </label>
-        </section>
+        </div>
+        <p className="group-footer">Shared with the {imageLabel} chat provider. Claude and CLIs can’t generate images.</p>
       </div>
     </div>
   );

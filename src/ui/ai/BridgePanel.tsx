@@ -42,7 +42,7 @@ export function BridgePanel({
   const clis = state.clis ? Object.entries(state.clis).filter(([, ok]) => ok).map(([n]) => n) : [];
 
   return (
-    <div className="bridge-panel">
+    <div className="glass card bridge-panel">
       <div className="bridge-head">
         <span className={`status-dot s-${state.status}`} />
         <div className="bridge-title">
@@ -57,7 +57,7 @@ export function BridgePanel({
         </div>
         {(state.status === 'on' || state.status === 'off') && (
           <button
-            className={state.status === 'on' ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm'}
+            className={state.status === 'on' ? 'btn btn-glass btn-sm' : 'btn btn-primary btn-sm'}
             disabled={state.busy === 'toggle'}
             onClick={() => setOn(state.status !== 'on')}
           >
@@ -89,7 +89,7 @@ export function BridgePanel({
             <li>Come back here and click Connect.</li>
           </ol>
           <p className="hint">Needs Node.js 18+ (nodejs.org) and at least one AI CLI (claude, codex or opencode).</p>
-          <button className="btn btn-secondary btn-sm" onClick={refresh}>
+          <button className="btn btn-glass btn-sm" onClick={refresh}>
             Check again
           </button>
         </div>
