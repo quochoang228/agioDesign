@@ -60,7 +60,7 @@ function toFills(paints: PaintData[] | undefined): Paint[] {
       });
     } else if (p.type === 'IMAGE') {
       if (!p.bytes.length) continue; // unresolved fetch — skip
-      const image = figma.createImage(new Uint8Array(p.bytes));
+      const image = figma.createImage(p.bytes);
       if (p.scaleMode === 'TILE') {
         out.push({ type: 'IMAGE', scaleMode: 'TILE', imageHash: image.hash, scalingFactor: 0.5 });
       } else {

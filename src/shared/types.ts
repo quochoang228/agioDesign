@@ -27,8 +27,12 @@ export interface GradientPaintData {
 
 export interface ImagePaintData {
   type: 'IMAGE';
-  /** Raw bytes of the decoded image, ready for `figma.createImage`. */
-  bytes: number[];
+  /**
+   * Raw bytes of the decoded image, ready for `figma.createImage`. A typed array
+   * (not number[]) so postMessage clones it as one buffer instead of boxing
+   * every byte.
+   */
+  bytes: Uint8Array;
   scaleMode: 'FILL' | 'FIT' | 'TILE';
   /** Source URL, resolved to `bytes` by the UI before sending to the sandbox. */
   src?: string;

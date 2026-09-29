@@ -348,7 +348,7 @@ function backgroundPaints(style: CSSStyleDeclaration, baseUrl?: string): PaintDa
           }
         }
         const scaleMode = bgScaleMode(sizes[i] ?? sizes[0] ?? '', repeats[i] ?? repeats[0] ?? '');
-        layerPaints.push({ type: 'IMAGE', bytes: [], scaleMode, src });
+        layerPaints.push({ type: 'IMAGE', bytes: new Uint8Array(0), scaleMode, src });
       }
     });
     // Figma paints stack bottom→top; CSS lists top first, so reverse to match.
@@ -769,7 +769,7 @@ function walk(
       type: 'IMAGE',
       name: 'image',
       ...base,
-      fills: src ? [{ type: 'IMAGE', bytes: [], scaleMode, src }] : [],
+      fills: src ? [{ type: 'IMAGE', bytes: new Uint8Array(0), scaleMode, src }] : [],
     };
   }
 
@@ -787,7 +787,7 @@ function walk(
         type: 'IMAGE',
         name: 'svg',
         ...base,
-        fills: [{ type: 'IMAGE', bytes: [], scaleMode: 'FILL', src: svgToDataUri(selfContainedSvg(el, w, h)) }],
+        fills: [{ type: 'IMAGE', bytes: new Uint8Array(0), scaleMode: 'FILL', src: svgToDataUri(selfContainedSvg(el, w, h)) }],
       };
     }
     return {
@@ -1045,7 +1045,7 @@ async function resolveImages(node: LayerNode): Promise<void> {
       if (!cache.has(src)) cache.set(src, loadImageBytes(src));
       tasks.push(
         cache.get(src)!.then((bytes) => {
-          if (bytes) paint.bytes = Array.from(bytes);
+          if (bytes) paint.bytes = bytes;
         }),
       );
     }

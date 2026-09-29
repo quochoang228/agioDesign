@@ -171,9 +171,9 @@ export async function executeTool(name: string, args: any): Promise<ToolResult> 
 
       // Internal: place generated image bytes (called by the UI, not the model).
       case 'place_image': {
-        const bytes: number[] = args?.bytes || [];
-        if (!bytes.length) return { ok: false, error: 'No image bytes.' };
-        const image = figma.createImage(new Uint8Array(bytes));
+        const bytes = args?.bytes;
+        if (!(bytes instanceof Uint8Array) || !bytes.length) return { ok: false, error: 'No image bytes.' };
+        const image = figma.createImage(bytes);
         const fill: ImagePaint = { type: 'IMAGE', scaleMode: 'FILL', imageHash: image.hash };
         if (args?.targetId) {
           const n = await figma.getNodeByIdAsync(args.targetId);

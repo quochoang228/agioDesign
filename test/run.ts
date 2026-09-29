@@ -12,7 +12,7 @@ async function loadSample(): Promise<string> {
 
 const rgba = (c: RGBA) => `rgba(${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)},${c.a})`;
 
-function bytesToUrl(bytes: number[]): string {
+function bytesToUrl(bytes: Uint8Array): string {
   const blob = new Blob([new Uint8Array(bytes)], { type: 'image/png' });
   return URL.createObjectURL(blob);
 }
