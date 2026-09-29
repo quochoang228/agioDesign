@@ -45,10 +45,11 @@ export const PROVIDERS: ProviderMeta[] = [
     label: 'Claude · Anthropic API',
     kind: 'api',
     available: true,
-    defaultModel: 'claude-opus-4-8',
+    defaultModel: 'claude-opus-5-5',
     models: [
-      { id: 'claude-opus-4-8', label: 'Opus 4.8 — most capable' },
-      { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6 — balanced' },
+      { id: 'claude-opus-5-5', label: 'Opus 5.5 — default' },
+      { id: 'claude-fable-5-1', label: 'Fable 5.1 — most capable' },
+      { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5 — balanced' },
       { id: 'claude-haiku-4-5', label: 'Haiku 4.5 — fastest' },
     ],
   },
@@ -135,7 +136,7 @@ export const DEFAULT_IMAGE_MODELS: Record<ImageProviderId, string> = {
 
 export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
   provider: 'anthropic',
-  model: 'claude-opus-4-8',
+  model: 'claude-opus-5-5',
   apiKeys: {},
   bridgeUrl: 'http://localhost:3939',
   bridgeToken: '',

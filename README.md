@@ -34,9 +34,11 @@ which is fed straight into the same converter pipeline as the other tabs. Its
   anywhere except the vendor API).
 - **Provider abstraction.** All backends implement one streaming `Provider`
   interface (`src/ui/ai/provider.ts`), so the chat UI is provider-agnostic.
-- **Default model:** `claude-opus-4-8` (also Sonnet 4.6 / Haiku 4.5). Calls the
-  Anthropic Messages API directly from the UI iframe via the documented
-  browser-access header, streaming the reply.
+- **Default model:** `claude-opus-5-5` (also Fable 5.1 / Sonnet 5.5 / Haiku 4.5).
+  Calls the Anthropic Messages API directly from the UI iframe via the
+  documented browser-access header, streaming the reply. On the 5.x models a
+  safety-classifier decline is retried server-side on a fallback model
+  (`fallbacks: "default"`); a final refusal surfaces as a readable error.
 - Each assistant reply gets an **Import to Figma** button that runs
   `htmlToLayerTree` at the currently-selected render width.
 
