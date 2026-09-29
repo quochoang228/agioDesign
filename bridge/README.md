@@ -57,7 +57,7 @@ The bridge launches Claude roughly as:
 
 ```
 claude --print --mcp-config <tmp.json> --strict-mcp-config \
-  --allowedTools mcp__figma__get_selection,… --output-format text "<task>"
+  --allowedTools mcp__figma__get_selection,… --output-format text   # task on stdin
 ```
 
 If your `claude` version names these flags differently or still prompts for tool
@@ -70,9 +70,12 @@ a permission-mode flag). The generated config registers a stdio MCP server:
 
 | Provider | Command |
 |---|---|
-| `claude`   | `claude --print [--model <m>] "<prompt>"` |
-| `codex`    | `codex exec [-m <m>] "<prompt>"` |
-| `opencode` | `opencode run [-m <m>] "<prompt>"` |
+| `claude`   | `claude --print [--model <m>]` |
+| `codex`    | `codex exec [-m <m>] -` |
+| `opencode` | `opencode run [-m <m>]` |
+
+The prompt is always written to the CLI's **stdin** (not argv), so long
+conversations don't hit the OS argument-length limit or show up in `ps`.
 
 A model of `default` means "use the CLI's own configured model" (no `--model`
 flag passed). All of these live in `CLIS` at the top of `server.mjs`.

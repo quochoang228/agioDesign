@@ -84,11 +84,15 @@ const TOOL_NAMES = [
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36';
 
-/** One-shot CLI invocations for /generate (Phase 3). */
+/**
+ * One-shot CLI invocations for /generate (Phase 3). The prompt is written to the
+ * child's stdin, not argv: whole conversations can exceed ARG_MAX, and argv is
+ * visible to every local user via `ps`.
+ */
 const CLIS = {
-  claude: { bin: 'claude', args: (prompt, model) => ['--print', ...(useModel(model) ? ['--model', model] : []), prompt] },
-  codex: { bin: 'codex', args: (prompt, model) => ['exec', ...(useModel(model) ? ['-m', model] : []), prompt] },
-  opencode: { bin: 'opencode', args: (prompt, model) => ['run', ...(useModel(model) ? ['-m', model] : []), prompt] },
+  claude: { bin: 'claude', args: (model) => ['--print', ...(useModel(model) ? ['--model', model] : [])] },
+  codex: { bin: 'codex', args: (model) => ['exec', ...(useModel(model) ? ['-m', model] : []), '-'] },
+  opencode: { bin: 'opencode', args: (model) => ['run', ...(useModel(model) ? ['-m', model] : [])] },
 };
 
 const useModel = (m) => m && m !== 'default';
@@ -270,7 +274,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const prompt = buildPrompt(payload.system || '', payload.messages || []);
-    runStreaming(res, spec.bin, spec.args(prompt, payload.model), req);
+    runStreaming(res, spec.bin, spec.args(payload.model), prompt, req);
     return;
   }
 
@@ -407,9 +411,8 @@ const server = http.createServer(async (req, res) => {
       '--output-format',
       'text',
       ...(useModel(b.model) ? ['--model', b.model] : []),
-      b.task || '',
     ];
-    runStreaming(res, 'claude', args, req, () => {
+    runStreaming(res, 'claude', args, String(b.task || ''), req, () => {
       try {
         fs.unlinkSync(cfgPath);
       } catch {
@@ -423,9 +426,11 @@ const server = http.createServer(async (req, res) => {
   res.end('not found');
 });
 
-/** Spawn a CLI, stream stdout to the SSE response, finish with [DONE]. */
-function runStreaming(res, bin, args, req, onDone) {
+/** Spawn a CLI, feed `input` on stdin, stream stdout to the SSE response, finish with [DONE]. */
+function runStreaming(res, bin, args, input, req, onDone) {
   const child = spawn(bin, args, { env: process.env });
+  child.stdin.on('error', () => {}); // CLI may exit before reading all input
+  child.stdin.end(input);
   let stderr = '';
   child.stdout.setEncoding('utf8');
   child.stdout.on('data', (chunk) => send(res, { text: chunk }));
