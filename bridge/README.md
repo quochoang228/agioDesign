@@ -14,26 +14,35 @@ node bridge/server.mjs 4000   # custom port
 ```
 
 Launch it from a terminal where the CLI you want is on your `PATH`. On startup
-it prints which CLIs it found:
+it prints which CLIs it found and its auth token:
 
 ```
 html-to-figma bridge → http://localhost:3939
 CLIs on PATH: { claude: true, codex: false, opencode: true }
+Bridge token (paste into plugin ⚙ Settings): 3q2…
 ```
 
 Then in the plugin: **AI Agent → ⚙ Settings**, pick a CLI provider (e.g.
-*Claude CLI · local bridge*), confirm the Bridge URL matches, and chat.
+*Claude CLI · local bridge*), confirm the Bridge URL matches, paste the token
+into *Bridge token*, and chat. The token is stable across restarts (stored in
+`~/.html-to-figma-bridge/token`; delete that file to rotate it, or set
+`BRIDGE_TOKEN`).
 
 ## Endpoints
 
+Every route except `/health` requires the `x-bridge-token` header (401 otherwise).
+
 **Phase 3 — one-shot generate**
-- `GET /health` → `{ ok, clis: { claude, codex, opencode } }`
+- `GET /health` → `{ ok, authorized }`, plus `clis: { claude, codex, opencode }`
+  when the token is valid.
 - `POST /generate` → body `{ cli, model, system, messages }`, streams SSE
   (`data: {"text":"…"}` chunks, then `data: [DONE]`; errors as `{"error":"…"}`).
 
 **Phase 6 — server-side web tools** (no CORS limits)
 - `GET /fetch?url=…` → returns the page's raw text (used by the `web_fetch` tool
-  as a fallback when a direct browser fetch is blocked by CORS).
+  as a fallback when a direct browser fetch is blocked by CORS). Only public
+  http(s) hosts; private, loopback and link-local addresses are refused, and
+  each redirect hop is re-checked.
 - `GET /search?q=…` → `{ results: [{title,url,snippet}] }` via a best-effort
   DuckDuckGo HTML scrape (keyless; may be rate-limited or change shape).
 
@@ -48,7 +57,7 @@ Then in the plugin: **AI Agent → ⚙ Settings**, pick a CLI provider (e.g.
   wired to the MCP server, streams its text as SSE.
 
 `bridge/mcp-server.mjs` is a standalone stdio MCP server (newline-delimited
-JSON-RPC) exposing the 8 Figma tools. The bridge spawns the CLI with a generated
+JSON-RPC) exposing the Figma tools defined in `bridge/tools.mjs`. The bridge spawns the CLI with a generated
 MCP config pointing at it; each `tools/call` is relayed through `/mcp/call`.
 
 ### Claude MCP flags (version-sensitive)
@@ -82,8 +91,11 @@ flag passed). All of these live in `CLIS` at the top of `server.mjs`.
 
 ## Notes & security
 
-- Binds to `127.0.0.1` only. It still executes local CLIs on request — treat it
-  as a local dev tool and don't expose the port to your network.
+- Binds to `127.0.0.1` only and requires the token on every call. CORS only
+  allows the plugin's opaque `null` origin (add others with
+  `BRIDGE_ALLOW_ORIGINS=a,b`), and the `Host` header must be
+  `localhost`/`127.0.0.1` to block DNS rebinding. It still executes local CLIs
+  on request — treat it as a local dev tool and don't expose the port.
 - `localhost` HTTP is reachable from the plugin even though Figma runs over
   HTTPS (browsers treat localhost as a secure context). The plugin manifest
   already allows all network domains.

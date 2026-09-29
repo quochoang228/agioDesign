@@ -24,9 +24,10 @@ conversion engine.
 
 ## AI Agent (new)
 
-A fourth tab, **AI Agent**, turns a prompt into editable Figma layers: Claude
-generates a self-contained HTML document, which is fed straight into the same
-converter pipeline as the other tabs.
+A fourth tab, **AI Agent**, turns a prompt into editable Figma layers: the model
+(Claude, GPT, Gemini, or a local CLI) generates a self-contained HTML document,
+which is fed straight into the same converter pipeline as the other tabs. Its
+**Agent** mode edits the current page directly through Figma tools.
 
 - **Bring-your-own-key.** Open ⚙ Settings, pick a provider/model, paste your API
   key. The key is persisted in `figma.clientStorage` (never bundled, never sent
@@ -48,8 +49,9 @@ converter pipeline as the other tabs.
 3. ✅ **Phase 3** — **Local CLI bridge** (`bridge/server.mjs`, zero-dep): a
    companion Node server on `localhost` that shells out to installed CLIs
    (`claude`, `codex`, `opencode`) — reuses their existing auth, no API key
-   needed. Run `npm run bridge`, then pick a *CLI · local bridge* provider. The
-   UI calls it over `http://localhost` (the Figma sandbox can't spawn processes).
+   needed. Run `npm run bridge`, paste the **token** it prints into ⚙ Settings →
+   *Bridge token*, then pick a *CLI · local bridge* provider. The UI calls it
+   over `http://localhost` (the Figma sandbox can't spawn processes).
 4. ✅ **Phase 4** — Figma **tool layer** + an agentic loop. The chat has a
    **Design / Agent** toggle: *Agent* mode lets the model inspect and edit the
    current page via tools — `get_selection`, `get_page_summary`,
@@ -59,7 +61,7 @@ converter pipeline as the other tabs.
    ` ```tool ` JSON blocks), so it works across **every** provider *and* the CLI
    bridge without per-vendor function-calling formats.
 5. ✅ **Phase 5** — **MCP relay**. `bridge/mcp-server.mjs` is a zero-dep stdio
-   MCP server exposing the 8 Figma tools; the bridge relays `tools/call` to the
+   MCP server exposing the Figma tools (defined once in `bridge/tools.mjs`); the bridge relays `tools/call` to the
    plugin over SSE and back. In Agent mode, the **Claude CLI** provider now
    drives the canvas via native MCP tool-calling (`src/ui/ai/cliMcp.ts`); other
    CLIs keep the Phase-4 text protocol. The whole relay loop is verified; the
@@ -72,9 +74,13 @@ converter pipeline as the other tabs.
    `web_search` (keyword search via the bridge's `/search`). Set an image
    provider + key in ⚙ Settings → *Image generation*.
 
-The provider stubs (OpenAI/Gemini/CLI) are listed in Settings as “soon” and the
-contracts (`src/shared/agent.ts`) already carry the `cli` + `bridgeUrl` fields
-so the later phases slot in without reshaping the data model.
+### Bridge security
+
+The bridge runs local CLIs and fetches URLs, so it only answers requests that
+carry its token (`x-bridge-token`). The token is generated on first run, stored
+in `~/.html-to-figma-bridge/token` (override with `BRIDGE_TOKEN`), and printed
+on startup. It also only accepts the plugin's `null` origin, checks the `Host`
+header against DNS rebinding, and `/fetch` refuses private/loopback addresses.
 
 ## Architecture
 
