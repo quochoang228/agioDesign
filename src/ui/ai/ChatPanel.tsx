@@ -148,7 +148,11 @@ export function ChatPanel({ importHtml, width }: Props) {
       return;
     }
     if (!hasKey) {
-      setError(meta.kind === 'cli' ? 'Set the bridge URL and token in Settings.' : 'Add your API key in Settings first.');
+      setError(
+        meta.kind === 'cli'
+          ? 'Set the bridge URL and token in Settings.'
+          : `“${meta.label}” needs an API key — add it in Settings, or pick a “CLI · local bridge” provider to use the bridge.`,
+      );
       setShowSettings(true);
       return;
     }
