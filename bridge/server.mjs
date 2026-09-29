@@ -43,6 +43,7 @@ const TOKEN = loadToken();
 /** Figma plugin iframes run with an opaque ("null") origin; allow extras via env. */
 const ALLOWED_ORIGINS = new Set(['null', ...(process.env.BRIDGE_ALLOW_ORIGINS || '').split(',').filter(Boolean)]);
 /** Reject DNS-rebinding requests: the Host header must name this loopback server. */
+const warnedOrigins = new Set();
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`, `[::1]:${PORT}`]);
 
 function loadToken() {
@@ -98,6 +99,9 @@ function cors(res) {
   if (origin && ALLOWED_ORIGINS.has(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
+  } else if (origin && !warnedOrigins.has(origin)) {
+    warnedOrigins.add(origin);
+    console.warn(`Blocked CORS origin ${origin} (allow it with BRIDGE_ALLOW_ORIGINS=${origin} if it is yours)`);
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'content-type,x-bridge-token');
